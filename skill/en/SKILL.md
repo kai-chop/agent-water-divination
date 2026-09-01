@@ -69,6 +69,13 @@ tool working. Answer what it names and run it again.
 
 ## Rules for the judging
 
+0. **A divination names what showed. It does not enumerate what could not be measured.** The
+   glass gives one reaction. An axis that did not show is **not a weakness and not homework** —
+   it is simply not part of this reading. Its numbers stay in the result JSON and the ledger; the
+   verdict and the interview leave it alone. Writing "cannot be compared" over and over produces
+   a measurement report, not a reading. The tools take the same shape: only axes that reacted are
+   drawn into a type's card, and the rest are summarised in one line. **A separation the other way
+   is different** — name it as having gone the other way, never folded in with the strengths.
 1. **Two verified quotes, or no naming.** A type is named only with (a) a signal count you can
    state and (b) two quotes read in their original context. One without the other is `undetermined`,
    never a weak yes.

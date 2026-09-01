@@ -116,11 +116,28 @@ def run_measure(args):
           + ", ".join("%s %d" % (p["label_en"], p["hits"]) for p in result["provisional"]))
 
     eff = result["effects"]
-    print("\n--- what actually happened next (%d agent turns) ---" % eff["assistant_turns"])
-    print("    six separate quantities, each with its own denominator, so they move independently")
-    for t in result["types"]:
-        for ax in [a for a in eff["axes"].values() if a["type"] == t["id"]]:
-            _print_axis(t, ax)
+    label_of = {t["id"]: t["label_en"] for t in result["types"]}
+    showed = [a for a in eff["axes"].values() if a["direction"] == "for"]
+    against = [a for a in eff["axes"].values() if a["direction"] == "against"]
+    quiet = [a for a in eff["axes"].values() if a["direction"] == "none"]
+    showed.sort(key=lambda a: -(a["lift"] if a["lift"] is not None else 0))
+
+    print("\n--- what the water did (%d agent turns) ---" % eff["assistant_turns"])
+    if showed:
+        for ax in showed:
+            _print_axis({"label_en": label_of.get(ax["type"], ax["type"])}, ax)
+    else:
+        print("  nothing separated from its own baseline in this window.")
+    for ax in against:
+        print("  ! went the other way:")
+        _print_axis({"label_en": label_of.get(ax["type"], ax["type"])}, ax)
+    if quiet:
+        # named, not itemised: these are reactions the glass did not have, and a reading that
+        # lists them turns into a survey of everything the operator failed to do
+        print("  (%d axes did not show: %s — too thin, or level with their baseline. Their "
+              "numbers are in the JSON.)"
+              % (len(quiet), ", ".join(sorted({label_of.get(a["type"], a["type"])
+                                               for a in quiet}))))
 
     res = eff["residual"]
     print("\n  Specialist — what the five do not explain")

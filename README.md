@@ -87,6 +87,13 @@ Conjurer's 75.0% against 57.2% (+17.8). Without the comparison column the readin
 promoted the flattest axis and buried the two that actually move. Any axis within 3 points of its
 baseline is printed as **saying nothing**.
 
+**And a reading names what showed.** An axis too thin to rate, or level with its own baseline,
+does not become a paragraph explaining that it could not be measured — it drops out of the reading
+entirely, and out of the interview with it. It is not a weakness and not homework; the glass did
+not react there. Its numbers stay in the result JSON. A separation the *other* way is a different
+thing and is named as one, never folded in with the strengths. This is the difference between a
+divination and a survey of everything you failed to do.
+
 The Emitter axis is the other half of the same lesson. It used to count "the agent did not ask a
 clarifying question" and read 97.0% — because agents almost never ask outright. Asking is only one
 of three ways an agent fills a gap you left; the other two are **stating an assumption** and

@@ -257,10 +257,14 @@ def render(data):
                     out.append("<blockquote>%s<cite>%s &nbsp;/&nbsp; %s</cite></blockquote>"
                                % (E(q["text"]), E(q["ts"]), E(name)))
                     break
-        ax = (data.get("effects", {}).get("axes") or {}).get(t["id"])
-        if ax:
+        # only the axes that reacted are drawn into a type's card; the rest are summarised once,
+        # below, because a reading that itemises every reaction the glass did not have is a survey
+        for ax in [a for k, a in (data.get("effects", {}).get("axes") or {}).items()
+                   if a.get("type", k) == t["id"] and a.get("direction", "for") != "none"]:
             out.append("<div class='axis'>")
-            out.append("<span class='tag'>DID IT WORK</span>")
+            out.append("<span class='tag'>%s</span>"
+                       % ("WENT THE OTHER WAY" if ax.get("direction") == "against"
+                          else "WHAT IT DID"))
             if ax["enough"]:
                 out.append("<p class='axis-n'>%s%% &nbsp;<span>%d of %d %s</span></p>"
                            % (ax["pct"], ax["hits"], ax["n"], E(ax["unit"])))
@@ -282,6 +286,18 @@ def render(data):
             out.append("<p class='read'>%s</p>" % E(reads[t["id"]]))
         out.append("</article>")
     out.append("</div></section>")
+
+    quiet = [(k, a) for k, a in (data.get("effects", {}).get("axes") or {}).items()
+             if a.get("direction") == "none"]
+    if quiet:
+        names = sorted({next((t["label_en"] for t in data["types"]
+                              if t["id"] == a.get("type", k)), a.get("type", k))
+                        for k, a in quiet})
+        out.append("<p class='note' style='margin:-2rem 0 0'>%d axis/axes did not show in this "
+                   "window (%s) — too thin, or level with their own baseline. They are not "
+                   "weaknesses and they are not homework; the glass simply did not react there. "
+                   "Their numbers are in the result JSON.</p>"
+                   % (len(quiet), E(", ".join(names))))
 
     # -- the rare ones --------------------------------------------------------
     eff = data.get("effects") or {}
@@ -444,13 +460,21 @@ def _self_test():
                                "detail": "Followed by a write into a rule file.",
                                "against": "your other requests", "base_n": 200,
                                "base_pct": 46.3, "lift": 37.0, "undiscriminating": False,
-                               "evidence": []},
+                               "showed": True, "direction": "for", "evidence": []},
+                     "sousa_oneshot": {"label": "corrections that landed in one go",
+                                       "unit": "corrections carrying a reason", "type": "sousa",
+                                       "n": 8, "hits": 7, "pct": 87.5, "enough": True,
+                                       "detail": "You said why.", "against": "bare corrections",
+                                       "base_n": 4, "base_pct": 100.0, "lift": -12.5,
+                                       "undiscriminating": False, "showed": True,
+                                       "direction": "against", "evidence": []},
                      "kyouka": {"label": "sessions that held their constraint", "unit": "sessions",
                                 "n": 20, "hits": 19, "pct": 95.0, "enough": True,
                                 "detail": "No correction after it.",
                                 "against": "sessions where you stated no constraint",
                                 "base_n": 51, "base_pct": 93.0, "lift": 2.0,
-                                "undiscriminating": True, "evidence": []}},
+                                "undiscriminating": True, "showed": False,
+                                "direction": "none", "evidence": []}},
             "residual": {"messages_examined": 40, "explained_by_the_five": 30,
                          "explained_pct": 75.0, "residual_that_did_something": 4,
                          "candidates": [{"ts": "2026-08-09T10:00",
@@ -480,11 +504,15 @@ def _self_test():
     check("the source of the six types is credited",
           "HUNTER" in prov and "Togashi" in prov)
     check("each type carries its own effect axis, not a shared one",
-          "DID IT WORK" in prov and "rules that became machinery" in prov)
+          "WHAT IT DID" in prov and "rules that became machinery" in prov)
     check("an axis is shown against its comparison population",
           "46.3%" in prov and "your other requests" in prov and "+37.0 pts" in prov)
-    check("a rate too close to its baseline is called out on the page",
-          "too close to the baseline to mean anything" in prov)
+    check("a separation the other way is named as one, not folded in with the strengths",
+          "WENT THE OTHER WAY" in prov and "corrections that landed in one go" in prov)
+    check("an axis that did not show is left out of its type's card",
+          "sessions that held their constraint" not in prov)
+    check("the ones that did not show are summarised once, as not-weaknesses",
+          "did not show in this window" in prov and "not homework" in prov)
     check("the residual is shown with what the agent did about it",
           "work the unspecified parts out from &lt;what&gt; I already said" in prov
           and "left a mechanism" in prov)

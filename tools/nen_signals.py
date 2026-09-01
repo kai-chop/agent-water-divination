@@ -388,10 +388,19 @@ def _axis(axis_id, hits, total, evidence=None, base_hits=0, base_total=0):
     undiscriminating = (pct is not None
                         and (base_pct is None and pct >= CEILING
                              or lift is not None and abs(lift) < LIFT_FLOOR))
+    # The glass shows one reaction. An axis either showed something or it did not, and the ones
+    # that did not are not weaknesses, gaps or homework -- they are simply not part of this
+    # reading. Their numbers stay in the JSON for the ledger; the reading leaves them alone.
+    showed = bool(total >= MIN_N and pct is not None and not undiscriminating)
+    # Direction matters in a reading that asserts strength. A separation the other way is still
+    # a real reaction and is named as one -- it is just not a strength, and folding it in with
+    # the strengths because the gap is large would be the opposite of honest.
+    direction = ("for" if showed and (lift is None or lift > 0)
+                 else "against" if showed else "none")
     return {"id": axis_id, "type": tid, "label": label, "unit": unit, "n": total, "hits": hits,
             "pct": pct, "enough": total >= MIN_N, "detail": detail,
             "against": against, "base_n": base_total, "base_pct": base_pct, "lift": lift,
-            "undiscriminating": undiscriminating,
+            "undiscriminating": undiscriminating, "showed": showed, "direction": direction,
             "evidence": evidence or []}
 
 
@@ -714,7 +723,12 @@ def open_questions(result, pattern_sets, cfg):
                 "blocking": t["signals"] is not None,
             })
 
-        for q in quotes:
+        # Only quotes that could carry the reading are worth checking the authorship of. A type
+        # no axis spoke for is not being named, so its quotes decide nothing.
+        in_the_reading = (tid == "tokushitsu" or any(
+            a["direction"] != "none"
+            for a in (result.get("effects", {}).get("axes") or {}).values() if a["type"] == tid))
+        for q in (quotes if in_the_reading else []):
             if q["paste"] or q["chars"] >= cfg["paste_min_chars"]:
                 qs.append({
                     "id": "auth_%s_%s" % (tid, q["ts"].replace(":", "").replace("-", "")),
@@ -731,8 +745,12 @@ def open_questions(result, pattern_sets, cfg):
                     "quote_ref": {"type": tid, "ts": q["ts"]},
                 })
 
+        showed_here = any(a["showed"] for a in (result.get("effects", {}).get("axes") or {}).values()
+                          if a["type"] == tid)
         for name, s in (t["signals"] or {}).items():
-            if s["n"] == 0:
+            # a zero only matters where the type is part of the reading; elsewhere it is one
+            # more thing the water did not do, and the reading does not list those
+            if s["n"] == 0 and showed_here:
                 qs.append({
                     "id": "occ_%s_%s" % (tid, name),
                     "kind": "occasion",
@@ -746,24 +764,15 @@ def open_questions(result, pattern_sets, cfg):
                     "blocking": False,
                 })
 
+    # Only what showed is asked about. An axis that did not show contributes nothing to the
+    # verdict, so there is nothing to unblock -- and interrogating the glass about the reactions
+    # it did not have is how a divination turns into a survey.
     for aid, ax in (result.get("effects", {}).get("axes") or {}).items():
+        if not ax["showed"]:
+            continue
         tid = ax["type"]
         t = next((x for x in result["types"] if x["id"] == tid), None)
         label = (t or {}).get("label_en") or tid
-        if not ax["enough"]:
-            qs.append({
-                "id": "occ_axis_%s" % aid,
-                "kind": "occasion",
-                "type": tid,
-                "why": "The %s axis had only %d observation(s), too few to rate."
-                       % (label, ax["n"]),
-                "ask": "Did this period simply not call for %s, or did you not reach for it?"
-                       % ax["label"],
-                "observe": "",
-                "answer_format": "no occasion | did not reach for it",
-                "blocking": False,
-            })
-            continue
         qs.append({
             "id": "attr_%s" % aid,
             "kind": "attribution",
@@ -943,16 +952,41 @@ def _self_test():
     check("a thin type produces a probe question", "probe" in kinds)
     check("probe questions carry the language's own wording",
           any(q["ask"] and q["kind"] == "probe" for q in qs))
-    check("a zero signal produces an occasion question, non-blocking",
-          any(q["kind"] == "occasion" and not q["blocking"] for q in qs))
+    # The reading only asks about what reacted. A type no axis spoke for contributes nothing to
+    # the verdict, so questions about it are questions about reactions the glass did not have.
+    def with_axis(res, tid, direction):
+        out = dict(res)
+        out["effects"] = {"axes": {tid: {"type": tid, "direction": direction, "showed":
+                                         direction != "none", "label": "x", "unit": "y",
+                                         "n": 9, "hits": 5, "pct": 55.6, "enough": True,
+                                         "base_pct": 30.0, "base_n": 9, "lift": 25.6,
+                                         "against": "the rest", "detail": "d",
+                                         "undiscriminating": False, "evidence": []}},
+                          "residual": {"candidates": []}}
+        return out
+
+    spoke = open_questions(with_axis(r, "sousa", "for"), pats, cfg)
+    silent = open_questions(with_axis(r, "sousa", "none"), pats, cfg)
+    check("a zero signal produces an occasion question where the type reacted",
+          any(q["kind"] == "occasion" and q["type"] == "sousa" and not q["blocking"]
+              for q in spoke))
+    check("no questions are asked about a type nothing reacted for",
+          not any(q["type"] == "sousa" for q in silent),
+          str([q["id"] for q in silent]))
+    check("an axis that reacted is asked about, and it blocks",
+          any(q["kind"] == "attribution" and q["blocking"] for q in spoke))
     check("Specialist's probe never blocks a verdict",
           all(q["blocking"] is False for q in qs
               if q["kind"] == "probe" and q["type"] == "tokushitsu"))
 
     long_own = [msg("i want " + "the same shape repeated, " * 30, "2026-08-01T10:00")]
-    qs2 = open_questions(measure(long_own, pats, cfg), pats, cfg)
-    check("a long quote triggers an authorship question",
-          any(q["kind"] == "authorship" and q["blocking"] for q in qs2))
+    lr = measure(long_own, pats, cfg)
+    check("a long quote in a type that reacted triggers an authorship question",
+          any(q["kind"] == "authorship" and q["blocking"]
+              for q in open_questions(with_axis(lr, "houshutsu", "for"), pats, cfg)))
+    check("the same quote is not asked about when nothing reacted for its type",
+          not any(q["kind"] == "authorship"
+                  for q in open_questions(with_axis(lr, "houshutsu", "none"), pats, cfg)))
 
     check("ranking is by evidence, and says so",
           provisional_ranking(r)[0]["hits"] >= provisional_ranking(r)[-1]["hits"])
