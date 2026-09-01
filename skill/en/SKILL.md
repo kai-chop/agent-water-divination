@@ -112,7 +112,12 @@ tool working. Answer what it names and run it again.
    aptitude was exercised; the axis is the only thing that says it worked. A type with a strong
    signal and a weak axis is a habit, not an aptitude — say exactly that. A type whose axis had too
    few observations falls back to the vocabulary, and the reading says which one it rested on.
-3. **Specialist is you reading the residual, and saying why.** All the tool does is isolate the
+3. **Specialist has a precondition, and it is machine-checked.** A leftover only means something
+   when the five explain **more than half** of your substantive messages. Below that floor most of
+   the leftover is what the detectors missed rather than what they cannot describe, so the tool
+   returns `usable: false` and it may not be used to recognise the type. Read it as material if
+   you like; do not build a verdict on it.
+   **Specialist is you reading the residual, and saying why.** All the tool does is isolate the
    messages none of the five explain that the agent nonetheless acted on. It claims nothing about
    them — the order is "wording unusual for your own corpus", which is a reading order, not a
    score. Your job is to read that residual and state, with reasons, one of:

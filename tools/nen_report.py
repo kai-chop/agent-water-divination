@@ -337,12 +337,18 @@ def render(data):
                         or "Not yet read — Specialist is decided by looking at these, not by a "
                            "number the tool produced.")
         out.append("<section><h2>What the five do not explain</h2>"
-                   "<p class='note'>Specialist is the leftover, so nothing here is scored. The "
-                   "five types' signals account for <b>%s%%</b> of your messages; %d of the rest "
-                   "were followed by the agent doing work. These are the ones whose wording is "
-                   "least like the rest of your own corpus — a reading order, not a claim that "
-                   "they are special.</p>"
-                   % (res["explained_pct"], res["residual_that_did_something"]))
+                   "<p class='note'>Specialist is the leftover, so nothing here is scored. Across "
+                   "your <b>%d</b> substantive messages the five explain <b>%s%%</b> "
+                   "(floor %s%%); %d of the rest were followed by the agent doing work. These are "
+                   "the ones whose wording is least like the rest of your own corpus — a reading "
+                   "order, not a claim that they are special.</p>"
+                   % (res.get("substantive", 0), res.get("recall_pct"),
+                      res.get("recall_floor"), res["residual_that_did_something"]))
+        if not res.get("usable", True):
+            out.append("<div class='qs'><div class='q block'><span class='tag'>NOT EVIDENCE"
+                       "</span><p class='ask'>%s</p><p class='why'>Listed below as material to "
+                       "read, not as grounds for recognising Specialist.</p></div></div>"
+                       % E(res.get("why_unusable") or ""))
         out.append("<p class='read' style='margin:-.8rem 0 1.4rem'><b>%s</b></p>" % E(verdict_note))
         if res["candidates"]:
             out.append("<div class='finds'>")
@@ -507,6 +513,10 @@ def _self_test():
                                 "direction": "none", "evidence": []}},
             "residual": {"messages_examined": 40, "explained_by_the_five": 30,
                          "explained_pct": 75.0, "residual_that_did_something": 4,
+                         "substantive": 24, "recall_pct": 29.2, "recall_floor": 50.0,
+                         "usable": False,
+                         "why_unusable": "The five explain 29.2% of your substantive messages, "
+                                         "below the 50.0% floor.",
                          "candidates": [{"ts": "2026-08-09T10:00",
                                          "text": "work the unspecified parts out from <what> I "
                                                  "already said",
@@ -549,7 +559,9 @@ def _self_test():
     check("the residual is shown with what the agent did about it",
           "work the unspecified parts out from &lt;what&gt; I already said" in prov
           and "left a mechanism" in prov)
-    check("the page says how much of you the five actually explain", "75.0%" in prov)
+    check("the page says how much of you the five actually explain", "29.2%" in prov)
+    check("a leftover below the recall floor is marked as not evidence",
+          "NOT EVIDENCE" in prov and "below the 50.0% floor" in prov)
     check("Specialist is left to the reader rather than scored",
           "decided by looking at these, not by a number" in prov)
     check("a corpus with no agent side is named as unmeasurable, not as zero effect",

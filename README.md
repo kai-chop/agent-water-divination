@@ -132,6 +132,14 @@ not a finish line, not steering, and not a metaphor.
 "There is not" is the ordinary outcome. The moment you decide in advance what to count, it stops
 being a residual.
 
+**And a leftover only means something if the five explain most of the rest.** Recall is measured
+over your *substantive* messages — the ones that could plausibly carry an aptitude, not "ok" and
+"carry on" — and below a floor of 50% the tool returns `usable: false`: at that point most of the
+leftover is what the detectors missed, not what they cannot describe. On the corpus this was built
+against the five explain **27.2%** of 389 substantive messages, so Specialist is not recognisable
+there at all, and the tool says so rather than leaving it to judgement. Raising that number is the
+open work; until it moves, the leftover is reading material and not evidence.
+
 ## What it found in the corpus it was built on
 
 One real corpus, 2026-07-27 → 2026-09-01, Claude Code and Codex transcripts, 505 extracted

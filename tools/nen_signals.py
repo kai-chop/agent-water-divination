@@ -646,6 +646,14 @@ MIN_RESIDUAL_CHARS = 24      # below this there is not enough to be distinctive 
 MIN_RESIDUAL_TOKENS = 4
 RESIDUAL_CANDIDATES = 6
 
+# "The five explain 18% of your messages" was measured over *every* message, including "ok" and
+# "carry on" -- and a message that exercises no aptitude is not a detector failure. Recall is
+# measured over the messages that could plausibly carry one, and below the floor the residual is
+# mostly detector failure rather than leftover, so it may not be used to recognise Specialist.
+# The floor was fixed before the number was known: more than half, or the leftover means nothing.
+SUBSTANTIVE_CHARS = 60
+RECALL_FLOOR = 50.0
+
 _LATIN = re.compile(r"[A-Za-z][A-Za-z'\-]{2,}")
 _CJK = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
 
@@ -676,7 +684,11 @@ def _residual(by_session, rx, type_rx):
             explained = sorted(tid for tid, r in type_rx.items() if r and r.search(e["text"]))
             nxt = _users(evs)[p + 1] if p + 1 < len(_users(evs)) else len(evs)
             span = evs[i + 1:nxt]
+            substantive = bool(len(e["text"]) >= SUBSTANTIVE_CHARS
+                               or (rx["request"] and rx["request"].search(e["text"]))
+                               or (rx["correction"] and rx["correction"].search(e["text"])))
             mine.append({"event": e, "tokens": toks, "explained": explained,
+                         "substantive": substantive,
                          "tools": sum(1 for x in span if x["kind"] == "tool"),
                          "mechanism": any(x["kind"] == "tool" and x["mechanism"] for x in span),
                          "verified": any(x["kind"] == "assistant" and x["verify"] for x in span)})
@@ -692,11 +704,28 @@ def _residual(by_session, rx, type_rx):
             sum(math.log(total / df[t]) for t in m["tokens"]) / len(m["tokens"]), 3)
     leftover.sort(key=lambda m: -m["unusualness"])
 
+    subs = [m for m in mine if m["substantive"]]
+    sub_explained = sum(1 for m in subs if m["explained"])
+    recall = round(100.0 * sub_explained / len(subs), 1) if subs else None
+    usable = bool(recall is not None and recall >= RECALL_FLOOR)
+    if usable:
+        leftover = [m for m in leftover if m["substantive"]]
+
     return {
         "messages_examined": total,
         "explained_by_the_five": total - sum(1 for m in mine if not m["explained"]),
         "explained_pct": round(100.0 * (total - sum(1 for m in mine if not m["explained"]))
                                / total, 1) if total else None,
+        "substantive": len(subs),
+        "recall_pct": recall,
+        "recall_floor": RECALL_FLOOR,
+        "usable": usable,
+        "why_unusable": None if usable else
+        ("The five explain %s%% of your substantive messages, below the %s%% floor. Below it the "
+         "leftover is mostly what the detectors missed, not what they cannot describe, so it is "
+         "not evidence for Specialist this window."
+         % (recall, RECALL_FLOOR) if recall is not None else
+         "No substantive messages to measure recall over."),
         "residual_that_did_something": len(leftover),
         "candidates": [{
             "ts": m["event"]["ts"][:16],
@@ -855,7 +884,7 @@ def open_questions(result, pattern_sets, cfg):
         })
 
     res = (result.get("effects") or {}).get("residual") or {}
-    if res.get("candidates"):
+    if res.get("candidates") and res.get("usable"):
         qs.append({
             "id": "residual",
             "kind": "residual",
@@ -1213,6 +1242,38 @@ def _self_test():
     check("stating a finish line counts as explained, not as leftover",
           measure_effects(finish_line, pats, cfg)["residual"]["candidates"] == [],
           str(measure_effects(finish_line, pats, cfg)["residual"]["candidates"]))
+
+    # -- the recall gate: a leftover only means something if the five explain most of the rest --
+    # "ok" and "carry on" exercise no aptitude and are not detector failures, so recall is
+    # measured over the messages that could plausibly carry one.
+    chatter = [ev("user", "ok", s="g0"), ev("user", "yes", s="g0"), ev("user", "go on", s="g0")]
+    explained_msgs = []
+    for i in range(6):
+        explained_msgs += [ev("user", "please fix it %d, you must not drop the constraint" % i,
+                              s="g%d" % (i + 1)),
+                           ev("tool", tool="Edit", s="g%d" % (i + 1))]
+    unexplained = [ev("user", "the quiet parts should follow from precedent, without me spelling every one of them out, %d" % i,
+                      s="h%d" % i)
+                   for i in range(2)]
+    high = measure_effects(explained_msgs + chatter + unexplained, pats, cfg)["residual"]
+    check("chatter is not counted as something the five failed to explain",
+          high["substantive"] == 8, str(high["substantive"]))
+    check("recall above the floor makes the leftover usable",
+          high["recall_pct"] >= RECALL_FLOOR and high["usable"] is True,
+          "recall=%s" % high["recall_pct"])
+
+    low = measure_effects([ev("user", "the quiet parts should follow from precedent, without me spelling every one of them out %d" % i,
+                              s="k%d" % i) for i in range(8)]
+                          + [ev("tool", tool="Edit", s="k0")], pats, cfg)["residual"]
+    check("recall below the floor makes the leftover unusable, with the reason stated",
+          low["usable"] is False and "below the" in (low["why_unusable"] or ""),
+          "recall=%s" % low["recall_pct"])
+    unusable_qs = open_questions(
+        {"types": [], "authorship": {"paste_suspect": {"n": 0}},
+         "effects": {"axes": {}, "residual": low}}, pats, cfg)
+    check("an unusable leftover is not offered as evidence for Specialist",
+          not any(q["kind"] == "residual" for q in unusable_qs),
+          str([q["id"] for q in unusable_qs]))
 
     idle = [ev("user", "ok", s="q2"), ev("user", "thanks", s="q2")]
     check("leftovers that led to no work are not candidates",

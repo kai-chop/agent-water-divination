@@ -148,8 +148,12 @@ def run_measure(args):
 
     res = eff["residual"]
     print("\n  Specialist — what the five do not explain")
-    print("    the five account for %s%% of your messages; %d of the rest were followed by work"
-          % (res["explained_pct"], res["residual_that_did_something"]))
+    print("    recall: the five explain %s%% of your %d substantive messages (floor %s%%)"
+          % (res["recall_pct"], res["substantive"], res["recall_floor"]))
+    if not res["usable"]:
+        print("    %s" % res["why_unusable"])
+        print("    (the leftover is still listed below, as material — not as evidence)")
+    print("    %d of the leftover were followed by work" % res["residual_that_did_something"])
     for c in res["candidates"]:
         marks = "".join([" +mechanism" if c["left_a_mechanism"] else "",
                          " +verified" if c["agent_verified"] else ""])
