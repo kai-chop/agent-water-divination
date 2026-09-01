@@ -74,7 +74,8 @@ letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
 .lede{color:var(--soft);max-width:34rem;margin:0}
 .verdict-line{margin:0;font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;
 font-size:clamp(1.3rem,3.6vw,1.9rem);line-height:1.4}
-.verdict-line b{color:var(--water)}
+.verdict-line b{color:var(--water);display:block;font-size:1.5em;margin-top:.2rem}
+.because{margin:.5rem 0 0;font-family:ui-monospace,monospace;font-size:.78rem;color:var(--faint)}
 .verdict-line span{display:block;font-family:ui-monospace,monospace;font-size:.72rem;
 color:var(--faint);margin-top:.35rem;letter-spacing:.02em}
 .state{display:inline-block;font-family:ui-monospace,monospace;font-size:.66rem;letter-spacing:.14em;
@@ -215,20 +216,26 @@ def render(data):
         else (reacted[0][1] if reacted else None)
     named = main_id if confirmed else (reacted[0][0] if reacted else None)
 
+    # The reading always names something. Confidence and basis carry the rigour; a page that
+    # refuses to say anything about the person is not a reading, whatever its statistics.
+    rd = data.get("reading") or {}
+    if not named and rd.get("type"):
+        named, lead = rd["type"], None
     if named:
-        out.append("<p class='verdict-line'>%s <b>%s</b><span>%s</span></p>"
-                   % ("You are a" if confirmed else "It looks like a",
-                      E("%s / %s" % (label_of.get(named, named), en_of.get(named, ""))),
-                      E("  ·  %s, %s%% against %s%%"
-                        % (lead["label"], lead["pct"], lead["base_pct"]))
-                      if lead and lead.get("base_pct") is not None else ""))
-    pending = len([q for q in (data.get("open_questions") or [])
-                   if q.get("blocking") and not (data.get("answers") or {}).get(q["id"])])
+        out.append("<p class='verdict-line'>%s<b>%s</b></p>"
+                   % ("あなたは " if confirmed else "水はこう動いた — ",
+                      E("%s / %s" % (label_of.get(named, named), en_of.get(named, "")))))
+        because = (("%s, %s%% against %s%%" % (lead["label"], lead["pct"], lead["base_pct"]))
+                   if lead and lead.get("base_pct") is not None else rd.get("because", ""))
+        if because:
+            out.append("<p class='because'>%s</p>" % E(because))
+    conf = {"firm": "はっきり出た", "provisional": "出ているが、まだ薄い",
+            "tentative": "かすかに動いた"}.get(rd.get("confidence"), "")
+    basis = {"axis": "効果で測れた", "quotes": "あなた自身の言葉から"}.get(rd.get("basis"), "")
     out.append("<p><span class='state %s'>%s</span></p>"
                % ("confirmed" if confirmed else "provisional",
                   "CONFIRMED" if confirmed
-                  else "not settled — %d answer%s would confirm it"
-                       % (pending, "" if pending == 1 else "s")))
+                  else E("%s — %s" % (conf, basis)) if conf else "not settled"))
     if verdict.get("summary"):
         out.append("<p class='lede'>%s</p>" % E(verdict["summary"]))
     out.append("<dl class='facts'>")
@@ -241,6 +248,36 @@ def render(data):
         out.append("<div class='fact'><dt>%s</dt><dd>%s<small>%s</small></dd></div>"
                    % (E(label), E(str(value)), E(sub)))
     out.append("</dl></header>")
+
+    # -- why it came out that way, in the operator's own words ----------------
+    # This is what the article did and what the statistics layer had quietly replaced: three
+    # things you actually wrote, and one line each on what they show.
+    if named:
+        t_named = next((t for t in data["types"] if t["id"] == named), None)
+        picked, seen = [], set()
+        for name, qs in ((t_named or {}).get("quotes") or {}).items():
+            for q in qs:
+                key = q["text"][:40]
+                if key in seen:
+                    continue
+                seen.add(key)
+                picked.append((name, q))
+                break
+        if picked:
+            out.append("<section><h2>あなたの言葉から</h2>"
+                       "<p class='note'>%s。原本で前後を読んで確かめたものだけを載せている。</p>"
+                       "<div class='finds'>" % E((t_named or {}).get("gloss", "")))
+            for name, q in picked[:3]:
+                out.append("<article class='find'><h3>%s</h3>"
+                           "<blockquote>%s<cite>%s</cite></blockquote></article>"
+                           % (E(name), E(q["text"]), E(q["ts"])))
+            out.append("</div></section>")
+
+    nm = data.get("next_move")
+    if nm:
+        out.append("<section><h2>明日ひとつ</h2><div class='qs'><div class='q'>"
+                   "<span class='tag'>NEXT</span><p class='ask'>%s</p></div></div></section>"
+                   % E(nm["do"]))
 
     # -- the six vessels ------------------------------------------------------
     out.append("<section><h2>The six vessels</h2><p class='note'>In the original test, which of "
@@ -336,7 +373,7 @@ def render(data):
         verdict_note = (verdict.get("specialist")
                         or "Not yet read — Specialist is decided by looking at these, not by a "
                            "number the tool produced.")
-        out.append("<section><h2>What the five do not explain</h2>"
+        out.append("<section><h2>足場 ③ — 五つで説明しきれなかったもの</h2>"
                    "<p class='note'>Specialist is the leftover, so nothing here is scored. Across "
                    "your <b>%d</b> substantive messages the five explain <b>%s%%</b> "
                    "(floor %s%%); %d of the rest were followed by the agent doing work. These are "
@@ -387,7 +424,8 @@ def render(data):
     answers = data.get("answers") or {}
     if qs:
         out.append("<section><h2>%s</h2><p class='note'>%s</p><div class='qs'>"
-                   % ("What the interview settled" if confirmed else "Before this can be a verdict",
+                   % ("What the interview settled" if confirmed
+                      else "足場 ④ — これに答えると確定する",
                       "A regex cannot tell a missing ability from a missing opportunity, or your "
                       "own words from text you pasted. These were asked directly."))
         for q in qs:
@@ -408,7 +446,7 @@ def render(data):
 
     # -- cross-cutting --------------------------------------------------------
     b = data["borrowed"]
-    out.append("<section><h2>Across all six</h2><p class='note'>Each metric twice: over every "
+    out.append("<section><h2>足場 ① — 横断の数値</h2><p class='note'>Each metric twice: over every "
                "message extracted, and over your own words only. The gap is pasted text.</p>"
                "<div class='scroll'><table><thead><tr><th>metric</th><th>all extracted</th>"
                "<th>your words only</th></tr></thead><tbody>")
@@ -423,7 +461,7 @@ def render(data):
     out.append("</tbody></table></div></section>")
 
     # -- limits ---------------------------------------------------------------
-    out.append("<section><h2>Reasons to doubt this page</h2><div class='qs'>")
+    out.append("<section><h2>足場 ② — このページを疑うための3点</h2><div class='qs'>")
     for head, body in (
         ("Zero is not absence",
          "A signal at zero can mean the vocabulary missed it. On the corpus this was built "
@@ -532,9 +570,26 @@ def _self_test():
 
     prov = render(data)
     check("the page leads with a name, not with a form",
-          "It looks like a" in prov and "Manipulator" in prov)
-    check("what is unsettled is stated as what would confirm it",
-          "would confirm it" in prov and "PROVISIONAL" not in prov)
+          "水はこう動いた" in prov and "Manipulator" in prov and "PROVISIONAL" not in prov)
+    check("the operator's own words carry the reason",
+          "あなたの言葉から" in prov and "from now on" in prov)
+
+    # The failure this replaced: a page that named nothing because no axis reached significance.
+    # A glass that shows nothing is a broken divination, so a name is produced either way.
+    silent = dict(data)
+    silent["effects"] = dict(data["effects"],
+                             axes={k: dict(a, direction="none", showed=False)
+                                   for k, a in data["effects"]["axes"].items()})
+    silent["reading"] = {"type": "sousa", "basis": "quotes", "confidence": "provisional",
+                         "headline": "steering", "because": "2 verified quotes"}
+    silent["next_move"] = {"do": "write finish lines on the requests that can carry one"}
+    page = render(silent)
+    check("a name still appears when no axis reached significance",
+          "Manipulator" in page and "水はこう動いた" in page, "")
+    check("the page says what the name rests on",
+          "あなた自身の言葉から" in page and "2 verified quotes" in page)
+    check("the reading ends with something to try, not with a number",
+          "明日ひとつ" in page and "write finish lines" in page)
     check("open questions are rendered when unanswered", "Weave the three ideas" in prov)
     check("transcript text is escaped, not injected",
           "&lt;b&gt;always&lt;/b&gt; &amp; forever" in prov and "<b>always</b>" not in prov)

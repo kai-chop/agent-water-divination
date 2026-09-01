@@ -958,6 +958,72 @@ def audit_patterns(pattern_sets, texts):
 BROAD_BY_DESIGN = {"concrete"}
 
 
+def reading(result):
+    """Always name a type, and say what the name rests on.
+
+    A glass that shows nothing is a broken divination, not a careful one. Rigour belongs in the
+    *confidence* and in the basis, never in whether an answer exists -- an earlier version let a
+    failed significance test silence the whole reading, and what came back was a page whose six
+    headings included "what cannot be explained", "why this is not a verdict" and "reasons to
+    doubt this page". The evidence was all still there; it was the structure that had given up.
+
+    Basis, strongest first:
+      axis   -- an effect axis separated from its own comparison population
+      quotes -- the operator's own words, verified, plus how densely the signals fall
+    """
+    axes = (result.get("effects") or {}).get("axes") or {}
+    showed = sorted([a for a in axes.values() if a.get("direction") == "for"],
+                    key=lambda a: -(a.get("lift") or 0))
+    if showed:
+        ax = showed[0]
+        return {"type": ax["type"], "basis": "axis", "confidence": "firm",
+                "headline": ax["label"],
+                "because": "%s%% against %s%% for %s"
+                           % (ax["pct"], ax["base_pct"], ax["against"]),
+                "axis": ax["id"]}
+
+    # Nothing separated. That is a statement about this month's sample size, not about the
+    # person, so the reading falls back to what the article itself used: their own words.
+    scored = []
+    for t in result.get("types") or []:
+        if t.get("signals") is None:
+            continue
+        quotes = {(q["ts"], q["text"][:40])
+                  for qs in (t.get("quotes") or {}).values() for q in qs}
+        hits = sum(s["n"] for s in t["signals"].values())
+        scored.append((len(quotes), hits, t))
+    scored.sort(key=lambda s: (-s[0], -s[1]))
+    if not scored:
+        return None
+    nq, hits, t = scored[0]
+    return {"type": t["id"], "basis": "quotes", "headline": t["gloss"],
+            "confidence": "provisional" if nq >= QUOTES_FOR_VERDICT else "tentative",
+            "because": "%d verified quote(s) and %d signal hits across %s"
+                       % (nq, hits, ", ".join(t["signals"].keys())),
+            "axis": None}
+
+
+def next_move(result):
+    """One concrete thing to do next. A reading that ends in a number ends; a reading that ends
+    in something to try tomorrow is the one people come back to."""
+    axes = (result.get("effects") or {}).get("axes") or {}
+    near = [a for a in axes.values() if a.get("would_settle_at_n")]
+    near.sort(key=lambda a: a["would_settle_at_n"] - a["n"])
+    if near:
+        a = near[0]
+        return {"axis": a["id"], "type": a["type"],
+                "do": "%s — you have %d %s so far and about %d would settle it, so this is the "
+                      "one to feed." % (a["detail"], a["n"], a["unit"], a["would_settle_at_n"]),
+                "gap": a["would_settle_at_n"] - a["n"]}
+    res = (result.get("effects") or {}).get("residual") or {}
+    if res and not res.get("usable", True):
+        return {"axis": None, "type": "tokushitsu",
+                "do": "The five explain %s%% of what you write; below %s%% the leftover cannot "
+                      "speak for Specialist. Widening the patterns is what moves that number."
+                      % (res.get("recall_pct"), res.get("recall_floor")), "gap": None}
+    return None
+
+
 def provisional_ranking(result):
     """Order the types by how much evidence exists, so the interview knows where the stakes are.
     Explicitly not a verdict: it ranks regex hits, and regex hits are candidates."""

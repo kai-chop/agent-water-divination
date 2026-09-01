@@ -99,6 +99,9 @@ def run_measure(args):
 
     result["open_questions"] = signals.open_questions(result, pats, cfg)
     result["provisional"] = signals.provisional_ranking(result)
+    # the reading always names something; the basis and the confidence carry the rigour
+    result["reading"] = signals.reading(result)
+    result["next_move"] = signals.next_move(result)
 
     os.makedirs(args.out, exist_ok=True)
     result_path = os.path.join(args.out, "divination.json")
@@ -413,9 +416,9 @@ def _self_test():
               "own=%d" % res["own"])
         check("an HTML page is written by measure",
               os.path.getsize(os.path.join(out, "water-divination.html")) > 2000)
-        check("the page states what is unsettled as what would confirm it, not as a form",
-              "would confirm it" in io.open(os.path.join(out, "water-divination.html"),
-                                            encoding="utf-8").read())
+        check("the page names a type even before anything is settled",
+              "水はこう動いた" in io.open(os.path.join(out, "water-divination.html"),
+                                          encoding="utf-8").read())
         check("an answers template is written with one slot per question",
               set(json.load(io.open(os.path.join(out, "answers.json"), encoding="utf-8")
                             )["answers"]) == {q["id"] for q in res["open_questions"]})
@@ -437,8 +440,7 @@ def _self_test():
         check("verdict is issued once every blocking question is answered", rc == 0)
         page = io.open(os.path.join(out, "water-divination.html"), encoding="utf-8").read()
         check("the confirmed page asserts the type rather than hedging it",
-              "CONFIRMED" in page and "would confirm it" not in page
-              and "You are a" in page)
+              "CONFIRMED" in page and "あなたは " in page and "水はこう動いた" not in page)
 
         no_main = dict(filled)
         no_main["verdict"] = dict(filled["verdict"], main="")
