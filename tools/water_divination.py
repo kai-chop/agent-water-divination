@@ -108,8 +108,9 @@ def run_measure(args):
     result["open_questions"] = signals.open_questions(result, pats, cfg)
     result["provisional"] = signals.provisional_ranking(result)
     # the reading always names something; the basis and the confidence carry the rigour
-    result["reading"] = signals.reading(result)
-    result["next_move"] = signals.next_move(result)
+    # the reading and the advice are computed after the reference and the profile below: the
+    # reference decides the profile, the profile decides which type is named, and the name
+    # decides whose register the advice gets written in
     # The comparison that makes a profile mean something. Default: the agent's own turns from the
     # same conversations -- the other writer in the room. Not other operators; there is no such
     # corpus here, and inventing one would be fabrication.
@@ -126,6 +127,8 @@ def run_measure(args):
         reference["_what"] = "prose in %s" % args.reference
     result["reference"] = reference
     result["profile"] = signals.profile(result, reference)
+    result["reading"] = signals.reading(result)
+    result["next_move"] = signals.next_move(result, pats)
 
     os.makedirs(args.out, exist_ok=True)
     result_path = os.path.join(args.out, "divination.json")

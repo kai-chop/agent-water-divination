@@ -404,9 +404,34 @@ def render(data):
 
     nm = data.get("next_move")
     if nm:
-        out.append("<section><h2>明日ひとつ</h2><div class='qs'><div class='q'>"
-                   "<span class='tag'>NEXT</span><p class='ask'>%s</p></div></div></section>"
-                   % E(nm["do"]))
+        out.append("<section><h2>この型で伸ばすなら</h2><div class='qs'>")
+        if nm.get("amplify"):
+            out.append("<div class='q'><span class='tag'>伸ばす</span>"
+                       "<p class='ask'>%s</p></div>" % E(nm["amplify"]))
+        if nm.get("detour"):
+            out.append("<div class='q'><span class='tag'>迂回する</span>"
+                       "<p class='ask'>%s</p><p class='why'>%s</p></div>"
+                       % (E(nm["detour"]),
+                          E("苦手な系統の手を練習させない。六性図の距離は払う代償で、"
+                            "同じ場所へは自分の型の語法で届く。")))
+        out.append("</div></section>")
+
+    # -- the step after the test: what to build on the type you have ---------
+    ab = (nm or {}).get("ability")
+    if ab:
+        out.append("<section><h2>この型で能力を組むなら</h2>"
+                   "<p class='note'>水見式は系統を出すところまで。次は<b>その系統で組む</b>段で、"
+                   "能力を鋭くするのは<b>制約と誓約</b>——自分に課す縛りです。"
+                   "AI相手の仕事では、それは実際にファイルへ焼いた規約そのもの。"
+                   "能力名は付けません。名前を発明した瞬間に、これは占いになります。</p>"
+                   "<div class='qs'>")
+        for tag, key in (("組める形", "shape"), ("鋭くする誓約", "vow"),
+                         ("無効化される時", "breaks")):
+            if ab.get(key):
+                out.append("<div class='q%s'><span class='tag'>%s</span>"
+                           "<p class='ask'>%s</p></div>"
+                           % (" block" if key == "breaks" else "", E(tag), E(ab[key])))
+        out.append("</div></section>")
 
     # -- the six vessels ------------------------------------------------------
     out.append("<section><h2>The six vessels</h2><p class='note'>In the original test, which of "
@@ -739,14 +764,28 @@ def _self_test():
                                    for k, a in data["effects"]["axes"].items()})
     silent["reading"] = {"type": "sousa", "basis": "quotes", "confidence": "provisional",
                          "headline": "steering", "because": "2 verified quotes"}
-    silent["next_move"] = {"do": "write finish lines on the requests that can carry one"}
+    silent["next_move"] = {"type": "sousa", "weak": "gugenka",
+                           "amplify": "直した時が焼き時。その場の訂正に一言足すだけでいい",
+                           "detour": "終わりを機械が判定できること——それは具現化系の手で、"
+                                     "あなたには高くつく",
+                           "ability": {"shape": "AIの判断そのものを条件で動かす",
+                                       "vow": "同じ訂正を二度しない",
+                                       "breaks": "口頭で直して終わった時"}}
     page = render(silent)
     check("a name still appears when no axis reached significance",
           "Manipulator" in page and "水はこう動いた" in page, "")
     check("the page says what the name rests on",
           "あなた自身の言葉から" in page and "2 verified quotes" in page)
-    check("the reading ends with something to try, not with a number",
-          "明日ひとつ" in page and "write finish lines" in page)
+    check("the advice is written inside the reader's own type, not as drilling a weak one",
+          "この型で伸ばすなら" in page and "直した時が焼き時" in page
+          and "苦手な系統の手を練習させない" in page)
+    check("the weak side is routed around, and named as costly rather than as a gap",
+          "あなたには高くつく" in page)
+    check("the reading goes on to what to build on the type, vow and all",
+          "この型で能力を組むなら" in page and "鋭くする誓約" in page
+          and "同じ訂正を二度しない" in page)
+    check("the ability is a shape and a vow, never an invented name",
+          "能力名は付けません" in page and "無効化される時" in page)
     check("open questions are rendered when unanswered", "Weave the three ideas" in prov)
     check("transcript text is escaped, not injected",
           "&lt;b&gt;always&lt;/b&gt; &amp; forever" in prov and "<b>always</b>" not in prov)

@@ -104,6 +104,72 @@
                       "You said what was wrong and why, or what rule should prevent it, and did not have to correct the same thing again.",
                       "bare corrections, with no reason attached"]
   },
+  "_craft": "Three fields per type, so advice can be written in the register of the reader's own type. In the source material the distance around the hexagon is a cost you pay, and nobody is told to train their weak side -- so a weakness is routed around using your own move, never drilled. The detour sentence is composed from the weak type's goal plus the strong type's move.",
+  "craft": {
+    "kyouka": {
+      "move": "state a constraint and hold it",
+      "goal": "the goal survives every new idea",
+      "amplify": "It held because you held it, not by luck. Naming one thing that will not move, before you start, gives every later decision something to be decided against."
+    },
+    "houshutsu": {
+      "move": "paint the finished picture and send it",
+      "goal": "the agent can act without asking what you meant",
+      "amplify": "The density is already there. Carry the description as far as the finished state and the same sentence does the briefing and the acceptance."
+    },
+    "henka": {
+      "move": "turn a feeling, or another field's structure, into this one's",
+      "goal": "'something is off' becomes something another person could check",
+      "amplify": "The metaphor arriving is the signal. Take it one step down toward the concrete and it is already a criterion."
+    },
+    "gugenka": {
+      "move": "write the spec and the finish line",
+      "goal": "the agent can tell for itself that it is done",
+      "amplify": "You ask for verification often. Move what you ask for to what counts as finished, and the checking stands on their side of the table."
+    },
+    "sousa": {
+      "move": "turn a correction into a rule and write it into the machinery",
+      "goal": "the same failure does not happen twice",
+      "amplify": "The moment you fix it is the moment to write it. One clause -- from now on -- and you never explain it a second time."
+    },
+    "tokushitsu": {
+      "move": "combine what the other five cannot account for",
+      "goal": "a move that fits nobody's type gets through",
+      "amplify": "Only in the windows where it is recognised. Do not go looking for it in the ones where it is not."
+    }
+  },
+  "_ability": "The step after the test. In the source material, knowing your type is where you start building an ability on it -- and what sharpens an ability is a vow, a restriction you place on yourself. Working with an agent, those restrictions are the rules you actually wrote into files, so the mapping is real rather than decorative. shape = what an ability on this type does, vow = the restriction that sharpens it, breaks = what nullifies it. No ability names: invent a name and it becomes a fortune.",
+  "ability": {
+    "kyouka": {
+      "shape": "Make what already exists heavier. Rather than adding a mechanism, take the one that is working and drive it deeper.",
+      "vow": "Do not add a second thing to hold. Hold one at a time, and never drop that one.",
+      "breaks": "When the list grows. Holding three at once is holding none."
+    },
+    "houshutsu": {
+      "shape": "Work where you are not watching. Throw the picture ahead of you and it still acts at a distance.",
+      "vow": "Finish the picture before you throw it. What you cannot finish, you do not throw.",
+      "breaks": "Sending the instruction without the picture. The further it goes, the less a thin one survives."
+    },
+    "henka": {
+      "shape": "Turn a feeling into a test someone else can run. Your own unease, made into a tool.",
+      "vow": "Every metaphor comes down one step toward the concrete. One that cannot come down is not used.",
+      "breaks": "Stopping at 'something is off'. Untranslated, it is only a mood."
+    },
+    "gugenka": {
+      "shape": "Leave the conversation behind as an object. What would have evaporated becomes something anyone can consult later.",
+      "vow": "Write the finish line before starting. If it cannot be written, it is not time to start.",
+      "breaks": "Saying 'make it good'. There is nothing there to make real."
+    },
+    "sousa": {
+      "shape": "Move the agent's judgement rather than its output. Change what it picks next, not what it just produced.",
+      "vow": "Never correct the same thing twice. The second time, it goes into the machinery instead.",
+      "breaks": "Fixing it in conversation and stopping there. A rule held in memory does not exist next session."
+    },
+    "tokushitsu": {
+      "shape": "A combination none of the other five procedures cover. It exists only in the windows where it is recognised.",
+      "vow": "Do not go looking in the windows where it is not.",
+      "breaks": "Claiming it yourself."
+    }
+  },
   "probes": {
     "_note": "Asked only for a type the corpus could not produce two quotes for. What is observed is the shape of the answer, not whether it is right.",
     "kyouka": "State the goal of what you're working on in one sentence, together with three constraints you will not drop.",

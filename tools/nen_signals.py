@@ -1080,7 +1080,22 @@ def reading(result):
     # person, so the reading falls back to what the article itself used: their own words. It
     # ranks on the same number the radar draws, so the name and the shape cannot disagree --
     # an earlier version ranked on quote count and named the type with the most *signals*.
-    rows = [r for r in profile(result) if not r["dark"]]
+    # Rank by how far the language stands out from the reference, not by raw share. Identity is
+    # what separates you from the other writer, not what you happen to say most -- and a type
+    # whose vocabulary is simply common would otherwise win every reading. Raw share only decides
+    # when there is nothing to stand out against.
+    rows = [r for r in profile(result, result.get("reference")) if not r["dark"]]
+    solid = [r for r in rows if (r["hits"] or 0) >= MIN_N and r.get("ratio")]
+    if solid:
+        solid.sort(key=lambda r: (-r["ratio"], -r["pct"]))
+        top = solid[0]
+        t = next((x for x in result.get("types") or [] if x["id"] == top["type"]), {})
+        return {"type": top["type"], "basis": "standout", "headline": t.get("gloss", ""),
+                "confidence": "provisional" if top["ratio"] >= 1.5 else "tentative",
+                "because": "この語り方の密度が、比較対象の %s倍（あなた %s / 相手 %s・1000字あたり）"
+                           % (top["ratio"], top["per_1k"], top["ref_per_1k"]),
+                "axis": None}
+
     rows.sort(key=lambda r: -r["pct"])
     if not rows or not rows[0]["hits"]:
         return None
@@ -1093,25 +1108,47 @@ def reading(result):
             "axis": None}
 
 
-def next_move(result):
-    """One concrete thing to do next. A reading that ends in a number ends; a reading that ends
-    in something to try tomorrow is the one people come back to."""
-    axes = (result.get("effects") or {}).get("axes") or {}
-    near = [a for a in axes.values() if a.get("would_settle_at_n")]
-    near.sort(key=lambda a: a["would_settle_at_n"] - a["n"])
-    if near:
-        a = near[0]
-        return {"axis": a["id"], "type": a["type"],
-                "do": "%s — you have %d %s so far and about %d would settle it, so this is the "
-                      "one to feed." % (a["detail"], a["n"], a["unit"], a["would_settle_at_n"]),
-                "gap": a["would_settle_at_n"] - a["n"]}
-    res = (result.get("effects") or {}).get("residual") or {}
-    if res and not res.get("usable", True):
-        return {"axis": None, "type": "tokushitsu",
-                "do": "The five explain %s%% of what you write; below %s%% the leftover cannot "
-                      "speak for Specialist. Widening the patterns is what moves that number."
-                      % (res.get("recall_pct"), res.get("recall_floor")), "gap": None}
-    return None
+def next_move(result, pattern_sets=None):
+    """What to do next, written in the register of the reader's own type.
+
+    In the source material the distance around the hexagon is a cost you pay, and nobody is ever
+    told to train their weak side -- you build around the type you have. An earlier version told
+    the reader to write twenty-six more finish lines, which is a Conjurer's move handed to
+    whoever happened to be measured, and it existed to fill the tool's own denominator. That is
+    backwards twice over.
+
+    So: amplify inside the type, and route around the weak side using your own move.
+    """
+    craft = {}
+    for ps in pattern_sets or []:
+        for tid, row in (ps.get("craft") or {}).items():
+            craft.setdefault(tid, row)
+    rd = result.get("reading") or {}
+    strong = rd.get("type")
+    if not (strong and craft.get(strong)):
+        return None
+
+    rows = {r["type"]: r for r in (result.get("profile") or [])}
+    weak = None
+    thin = [r for r in rows.values()
+            if not r["dark"] and r["type"] != strong and r.get("ratio")]
+    if thin:
+        weak = min(thin, key=lambda r: r["ratio"])["type"]
+
+    move = craft[strong]
+    ability = {}
+    for ps in pattern_sets or []:
+        ability = (ps.get("ability") or {}).get(strong) or ability
+        if ability:
+            break
+    out = {"type": strong, "amplify": move.get("amplify", ""), "weak": weak, "detour": "",
+           "ability": ability or None}
+    if weak and craft.get(weak):
+        out["detour"] = ("%s——それが要る場面はある。だが「%s」は%sの手で、あなたには高くつく。"
+                         "「%s」で同じ場所に効く。"
+                         % (craft[weak].get("goal", ""), craft[weak].get("move", ""),
+                            rows[weak]["label"], move.get("move", "")))
+    return out
 
 
 def provisional_ranking(result):
