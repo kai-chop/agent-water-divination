@@ -167,6 +167,8 @@ def measure(msgs, pattern_sets, cfg, samples=SAMPLES_PER_SIGNAL):
             union = _alt(pattern_sets, lambda ps, t=tid: "|".join(
                 v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
             entry["messages_marked"] = sum(1 for m in own if union and union.search(m["text"]))
+            # density, for comparing against a writer whose messages are a different length
+            entry["marks"] = sum(len(union.findall(m["text"])) for m in own) if union else 0
             for name in names:
                 rx = _alt(pattern_sets,
                           lambda ps, n=name: (ps.get("types", {}).get(tid) or {})
@@ -185,6 +187,7 @@ def measure(msgs, pattern_sets, cfg, samples=SAMPLES_PER_SIGNAL):
         "sessions": len({m["session"] for m in own}),
         "length": {"median": int(statistics.median([len(m["text"]) for m in own])),
                    "max": max(len(m["text"]) for m in own)},
+        "chars": sum(len(m["text"]) for m in own),
         "authorship": {
             "own": len(own),
             "paste_suspect": rate(len(pasted), len(msgs)),
@@ -987,7 +990,30 @@ def audit_patterns(pattern_sets, texts):
 BROAD_BY_DESIGN = {"concrete"}
 
 
-def profile(result):
+def reference_rates(pattern_sets, texts):
+    """How often each type's marks appear in prose nobody wrote to steer an agent.
+
+    This is the only comparison this repo can make honestly. There is no corpus of other
+    operators here, and inventing percentages for one would be fabrication -- but "your
+    instructions carry constraint language six times as often as ordinary writing does" is
+    measurable today, and it is the sentence that makes a profile mean something. Say what the
+    reference *is* whenever the ratio is shown: ordinary prose, not other people.
+    """
+    if not texts:
+        return {}
+    out = {}
+    for tid in type_order(pattern_sets):
+        if not signal_names(pattern_sets, tid):
+            continue
+        rx = _alt(pattern_sets, lambda ps, t=tid: "|".join(
+            v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
+        hits = sum(1 for t in texts if rx and rx.search(t))
+        out[tid] = round(100.0 * hits / len(texts), 2)
+    out["_n"] = len(texts)
+    return out
+
+
+def profile(result, reference=None):
     """The shape of the six across your own writing — a character reading, not a trial.
 
     Deliberately free of the sample-size machinery that governs the axes. An axis asks "did this
@@ -1007,12 +1033,18 @@ def profile(result):
                               .get(t["id"]) == "recognised")
             rows.append({"type": t["id"], "label": t["label"], "label_en": t["label_en"],
                          "pct": 100.0 if recognised else 0.0, "hits": None,
+                         "per_1k": None, "ref_per_1k": None, "ratio": None,
                          "dark": not recognised})
             continue
         hits = t.get("messages_marked", 0)
+        pct = round(100.0 * hits / own, 1) if own else 0.0
+        chars = result.get("chars") or 0
+        mine = round(1000.0 * t.get("marks", 0) / chars, 2) if chars else None
+        ref = (reference or {}).get(t["id"])
         rows.append({"type": t["id"], "label": t["label"], "label_en": t["label_en"],
-                     "pct": round(100.0 * hits / own, 1) if own else 0.0,
-                     "hits": hits, "dark": False})
+                     "pct": pct, "hits": hits, "dark": False,
+                     "per_1k": mine, "ref_per_1k": ref,
+                     "ratio": round(mine / ref, 1) if (ref and mine) else None})
 
     top = max([r["pct"] for r in rows if not r["dark"]] or [1.0]) or 1.0
     for r in rows:

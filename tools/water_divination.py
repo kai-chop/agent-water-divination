@@ -27,6 +27,7 @@ Self-test: python tools/water_divination.py --self-test
 """
 import argparse
 import datetime
+import glob
 import io
 import json
 import os
@@ -94,6 +95,13 @@ def run_measure(args):
     flag_rx = {name: signals._alt(pats, lambda ps, k=key: ps.get("effects", {}).get(k))
                for name, key in flag_keys.items()}
     mech_rx = signals._alt(pats, lambda ps: ps.get("effects", {}).get("mechanism_path"))
+    # count the same marks in the agent's own turns as we read them: the reference is the other
+    # writer in the room, not a pile of documentation
+    ref_counts = {}
+    flag_rx["_ref"] = {tid: signals._alt(pats, lambda ps, t=tid: "|".join(
+        v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
+        for tid in signals.type_order(pats) if signals.signal_names(pats, tid)}
+    flag_rx["_ref_out"] = ref_counts
     tl, blind = corpus.collect_timeline(cfg, since, until, flag_rx, mech_rx, attrib)
     result["effects"] = signals.measure_effects(tl, pats, cfg, blind)
 
@@ -102,7 +110,22 @@ def run_measure(args):
     # the reading always names something; the basis and the confidence carry the rigour
     result["reading"] = signals.reading(result)
     result["next_move"] = signals.next_move(result)
-    result["profile"] = signals.profile(result)
+    # The comparison that makes a profile mean something. Default: the agent's own turns from the
+    # same conversations -- the other writer in the room. Not other operators; there is no such
+    # corpus here, and inventing one would be fabrication.
+    ref_n = ref_counts.pop("_n", 0)
+    ref_chars = ref_counts.pop("_chars", 0)
+    reference = ({k: round(1000.0 * v / ref_chars, 2) for k, v in ref_counts.items()}
+                 if ref_chars else {})
+    reference["_n"] = ref_n
+    reference["_chars"] = ref_chars
+    reference["_what"] = "the agent's own turns in the same conversations"
+    if getattr(args, "reference", None):
+        texts = _reference_texts(corpus.resolve(args.reference))
+        reference = signals.reference_rates(pats, texts)
+        reference["_what"] = "prose in %s" % args.reference
+    result["reference"] = reference
+    result["profile"] = signals.profile(result, reference)
 
     os.makedirs(args.out, exist_ok=True)
     result_path = os.path.join(args.out, "divination.json")
@@ -226,6 +249,23 @@ def _print_axis(t, ax):
 
 
 
+def _reference_texts(root, cap=4000):
+    """Paragraphs of ordinary prose to compare against. Documentation by default -- writing, but
+    not writing aimed at an agent. Point --reference at anything you would rather be compared to."""
+    out = []
+    for path in sorted(glob.glob(os.path.join(root, "**", "*.*"), recursive=True)):
+        if os.path.splitext(path)[1].lower() not in (".md", ".txt"):
+            continue
+        try:
+            with io.open(path, encoding="utf-8", errors="replace") as f:
+                out += [p.strip() for p in re.split(r"\n\s*\n", f.read()) if p.strip()]
+        except OSError:
+            continue
+        if len(out) >= cap:
+            break
+    return out[:cap]
+
+
 def _answers_template(result):
     return {
         "_howto": "Fill `answer` for every question. Blocking ones gate the verdict. "
@@ -234,9 +274,14 @@ def _answers_template(result):
                      "this person, built from the quotes above and written in their language -- "
                      "not the type's definition pasted in. Say what they do, in their words, and "
                      "one thing it costs them. No flattery and no certainty you do not have.",
+        "_reads": "One per type, in their language, about THEM -- never the definition restated. "
+                  "The strong ones are asserted plainly; the quiet ones say what they did not "
+                  "reach for this period, which is not the same as a weakness. Every type gets "
+                  "a line: a reading that only discusses its winner is a scoreboard.",
         "answers": {q["id"]: {"answer": "", "note": ""} for q in result["open_questions"]},
-        "verdict": {"main": "", "portrait": "", "roles": {}, "reads": {}, "summary": "",
-                    "title": ""},
+        "verdict": {"main": "", "portrait": "",
+                    "roles": {}, "summary": "", "title": "",
+                    "reads": {t["id"]: "" for t in result["types"]}},
     }
 
 
@@ -495,6 +540,9 @@ def main():
     m.add_argument("--on", help="a single day")
     m.add_argument("--last", help="12h / 30d / 8w")
     m.add_argument("--config")
+    m.add_argument("--reference", metavar="DIR",
+                   help="prose to compare against (default: this repo's docs). Ordinary writing, "
+                        "not other people -- there is no corpus of other operators here")
     m.add_argument("--out", default="out")
 
     v = sub.add_parser("verdict", help="apply the answers and, if they suffice, conclude")

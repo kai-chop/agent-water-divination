@@ -96,6 +96,17 @@ fill:var(--text)}
 .radar .rv{font-family:ui-monospace,monospace;font-size:10px;fill:var(--faint)}
 .shapewrap{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
 .shapewrap .side{flex:1 1 15rem;min-width:14rem;color:var(--soft);font-size:.9rem}
+.strengths{display:flex;flex-direction:column;gap:1px;background:var(--line);
+border:1px solid var(--line)}
+.st{background:var(--surface);padding:1.1rem 1.3rem;display:flex;gap:1.2rem;align-items:baseline}
+.st .n{font-family:ui-monospace,monospace;font-size:1.6rem;color:var(--water);
+font-variant-numeric:tabular-nums;min-width:4.2rem}
+.st h3{font-size:1.15rem;margin:0}
+.st h3 small{font-family:ui-monospace,monospace;font-size:.62rem;color:var(--faint);
+margin-left:.5rem}
+.st p{margin:.35rem 0 0;color:var(--soft);font-size:.9rem;line-height:1.75}
+.mine{margin:0;font-size:1rem;line-height:1.85;color:var(--text)}
+.card .def{margin:0;font-size:.78rem;color:var(--faint)}
 .verdict-line span{display:block;font-family:ui-monospace,monospace;font-size:.72rem;
 color:var(--faint);margin-top:.35rem;letter-spacing:.02em}
 .state{display:inline-block;font-family:ui-monospace,monospace;font-size:.66rem;letter-spacing:.14em;
@@ -329,6 +340,31 @@ def render(data):
                       E(portrait), E("器の反応: %s" % t_big.get("reaction", ""))))
         out.append("</div></section>")
 
+    # -- the strengths, said plainly, before anything qualifies them ----------
+    # Ranked by how far the language stands out, not by raw share: "you write this way six times
+    # as densely as the model does" is the sentence that makes a profile land.
+    prof_sorted = sorted([r for r in (data.get("profile") or []) if not r["dark"]],
+                         key=lambda r: (-(r.get("ratio") or 0), -r["pct"]))
+    ref = data.get("reference") or {}
+    if prof_sorted:
+        out.append("<section><h2>突出しているもの</h2>"
+                   "<p class='note'>比較対象は<b>%s</b>（%s文字）。1000文字あたりの密度で、"
+                   "文章の長さの差を消してある。<b>他の人との比較ではない</b>——"
+                   "この道具は他人のコーパスを持っていないので、そこは測れない。</p>"
+                   "<div class='strengths'>"
+                   % (E(ref.get("_what", "—")), E("{:,}".format(ref.get("_chars", 0)))))
+        for r in prof_sorted[:3]:
+            t_r = next((t for t in data["types"] if t["id"] == r["type"]), {})
+            line = reads.get(r["type"]) or t_r.get("gloss", "")
+            big = ("×%.1f" % r["ratio"]) if r.get("ratio") else ("%s%%" % r["pct"])
+            sub = ("あなた %s / 相手 %s（1000字あたり）" % (r.get("per_1k"), r.get("ref_per_1k"))
+                   if r.get("ratio") else "発話の %s%%" % r["pct"])
+            out.append("<div class='st'><span class='n'>%s</span>"
+                       "<div><h3>%s <small>%s</small></h3><p>%s</p>"
+                       "<p style='color:var(--faint);font-size:.75rem'>%s</p></div></div>"
+                       % (E(big), E(r["label"]), E(r["label_en"]), E(line), E(sub)))
+        out.append("</div></section>")
+
     # -- the shape of the six, free of the sample-size machinery --------------
     prof = data.get("profile")
     if prof:
@@ -388,7 +424,14 @@ def render(data):
     out.append("</div></section>")
 
     # -- per type -------------------------------------------------------------
-    out.append("<section><h2>Type by type</h2><p class='note'>Percentages are over your own "
+    # Strongest first. A reading that walks the canonical order buries what the person came for
+    # under four types they barely used.
+    order = {r["type"]: i for i, r in enumerate(
+        sorted(data.get("profile") or [], key=lambda r: -r["pct"]))}
+    if order:
+        data = dict(data, types=sorted(data["types"],
+                                       key=lambda t: order.get(t["id"], 99)))
+    out.append("<section><h2>系統ごと — あなたの場合</h2><p class='note'>Percentages are over your own "
                "messages only. Every quote is a candidate until it has been read in its original "
                "context.</p><div class='cards'>")
     for t in data["types"]:
@@ -399,7 +442,14 @@ def render(data):
                    "<span class='en'>%s</span>%s</div>"
                    % (cls, E(t["label"]), E(t["label_en"]),
                       "<span class='state'>%s</span>" % E(role) if role else ""))
-        out.append("<p class='def'>%s</p>" % E(t["gloss"]))
+        # The person's own reading of this type comes first and large; the shipped definition is
+        # a fallback, and is marked as one so nobody mistakes a definition for a reading.
+        mine = reads.get(t["id"])
+        if mine:
+            out.append("<p class='mine'>%s</p>" % E(mine))
+            out.append("<p class='def'>定義: %s</p>" % E(t["gloss"]))
+        else:
+            out.append("<p class='def'>%s</p>" % E(t["gloss"]))
         if t["signals"] is None:
             out.append("<p class='read'><b>No detector, by design.</b> %s</p>" % E(t["reason"]))
         else:
@@ -442,8 +492,6 @@ def render(data):
                            % (ax["base_n"], E(ax["against"])))
             out.append("<p class='why'>%s — %s</p>" % (E(ax["label"]), E(ax["detail"])))
             out.append("</div>")
-        if reads.get(t["id"]):
-            out.append("<p class='read'>%s</p>" % E(reads[t["id"]]))
         out.append("</article>")
     out.append("</div></section>")
 
@@ -737,13 +785,23 @@ def _self_test():
 
     data2 = dict(data)
     data2["verdict"] = {"confirmed": True, "main": "sousa", "title": "Water Divination",
-                        "roles": {"sousa": "main"}, "reads": {"sousa": "held across the period"},
+                        "roles": {"sousa": "main"},
+                        "reads": {"sousa": "あなたは断られた時にそれを機構へ移す人です",
+                                  "kyouka": "制約は置くが、置いたあとは言い直していません"},
                         "summary": "Manipulator, on evidence."}
     data2["answers"] = {"probe_tokushitsu": {"answer": "pass", "note": "wove them"}}
     conf = render(data2)
     check("confirmed state is stated on the page", "CONFIRMED" in conf and "PROVISIONAL" not in conf)
     check("the main type is marked on its vessel", "data-tag='MAIN'" in conf)
     check("answers are shown beside their questions", "wove them" in conf)
+    check("a type's own reading leads its card, with the shipped definition demoted",
+          "class='mine'>あなたは断られた時" in conf and "定義: steering" in conf)
+    check("the standouts are said plainly, before anything qualifies them",
+          conf.index("突出しているもの") < conf.index("系統ごと"))
+    check("the standout names its reference and refuses to imply other people",
+          "他の人との比較ではない" in conf)
+    check("a type with no reading of its own falls back to the definition, unmarked as a reading",
+          "class='mine'" in conf and conf.count("class='mine'") == 2)
 
     print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1

@@ -393,6 +393,22 @@ def _agent_flags(text, flags):
     return {name: bool(rx and text and rx.search(text)) for name, rx in flags.items()}
 
 
+# The agent's own turns are the one large body of writing in the corpus that the operator did not
+# write, in the same domain, at the same time. Documentation makes a terrible reference -- it is
+# unusually dense in exactly this vocabulary, so everything scores below 1 and nothing stands out.
+def _count_reference(text, ref_rx, ref_out):
+    """Occurrences per character, not per message. The agent writes far longer messages than the
+    operator does, so a per-message rate compares message length and nothing else -- measured
+    2026-09-02, every type came out below 1.0 against the agent for that reason alone."""
+    if not (ref_rx and ref_out is not None and text):
+        return
+    ref_out["_n"] = ref_out.get("_n", 0) + 1
+    ref_out["_chars"] = ref_out.get("_chars", 0) + len(text)
+    for tid, rx in ref_rx.items():
+        if rx:
+            ref_out[tid] = ref_out.get(tid, 0) + len(rx.findall(text))
+
+
 # `question` is the agent asking outright. `assumption` and `options` are the quieter forms of the
 # same thing -- the agent filling a gap you left, or handing the choice back. Asking outright is
 # rare enough that a rate built on it alone sits at the ceiling and discriminates nothing.
@@ -423,7 +439,9 @@ def timeline_claude_code(root, flag_rx, mechanism_rx, skip):
                         and text and not text.startswith(skip)):
                     yield _event(ts, session, "user", text=text)
             elif d.get("type") == "assistant":
-                yield _event(ts, session, "assistant", flags=_agent_flags(text, flag_rx))
+                _count_reference(text, flag_rx.get("_ref"), flag_rx.get("_ref_out"))
+                yield _event(ts, session, "assistant", flags=_agent_flags(
+                    text, {k: v for k, v in flag_rx.items() if not k.startswith("_")}))
                 for e in _tool_events(content, ts, session, mechanism_rx):
                     yield e
 
@@ -442,7 +460,9 @@ def timeline_codex(root, flag_rx, mechanism_rx, skip):
                     if text and not text.startswith(skip):
                         yield _event(ts, session, "user", text=text)
                 elif p.get("role") == "assistant":
-                    yield _event(ts, session, "assistant", flags=_agent_flags(text, flag_rx))
+                    _count_reference(text, flag_rx.get("_ref"), flag_rx.get("_ref_out"))
+                    yield _event(ts, session, "assistant", flags=_agent_flags(
+                        text, {k: v for k, v in flag_rx.items() if not k.startswith("_")}))
             elif p.get("type") == "custom_tool_call":
                 for e in _tool_events([p], ts, session, mechanism_rx):
                     yield e
