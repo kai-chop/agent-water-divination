@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 
-# your own config and your own readings: both contain private paths and private words
+# your own config, your own pattern additions, and your own readings: all three contain
+# private paths, private words, and the names of the assistants you work with
 water-divination.json
+patterns/local.json
 out/

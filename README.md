@@ -192,11 +192,12 @@ about twenty lines in `tools/nen_corpus.py`.
   python tools/nen_signals.py --audit-patterns .
   ```
 
-  Point it at any prose you have. Over this repo's own 150 paragraphs of documentation, the
-  loosest real pattern is English `constraint` at **6.0%** (documentation is unusually full of
-  "must" and "never"), then `attribution` at 4.7% and `verify` at 4.0%; everything else sits at
-  or below 3.3%. `concrete` matches 79.3% and is meant to — it exists to notice that a message
-  contains *any* identifier or number, and is used as a negative guard.
+  Point it at any prose you have. Over this repo's own 165 paragraphs of documentation, the
+  loosest real patterns are English `constraint` at **9.1%** and `reasoning` at **8.5%** —
+  documentation is unusually full of "must", "never" and "because", so treat that as an upper
+  bound rather than a rate you would see on instructions. `concrete` matches 80.0% and is meant
+  to: it exists to notice that a message contains *any* identifier or number, and is used as a
+  negative guard.
 
   Treat English counts as weaker evidence than Japanese ones until someone measures the
   sensitivity half.

@@ -78,6 +78,8 @@
   },
   "_axes": "The operator's own vocabulary that each independent axis needs. Kept apart from `types` because these are read to detect a transition inside a session, not to score a message.",
   "axes": {
+    "_reasoning": "A correction that carries its reason. Detected by the *shape* of an explanation rather than by a topic vocabulary -- the most common shape in the measured corpus was widening the scope ('not specific to X, this is about all of Y'), which no topic vocabulary caught.",
+    "reasoning": "\\b(because|since |the reason|that means|which is why|not just .{0,25} but|not specific to|applies to (all|every)|in general|the same goes for)\\b",
     "vague": "\\b(something('s| is) off|not quite|feels? (wrong|off)|somehow|a bit weird|hard to say|you know what i mean|meh)\\b",
     "concrete_criterion": "\\b(threshold|above \\d|below \\d|within \\d|criteri(on|a)|the test is|measurable|observable|counts? as|define it as|\\d+ ?(ms|px|%|s\\b))"
   },

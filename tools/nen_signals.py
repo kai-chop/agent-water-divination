@@ -271,7 +271,7 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
     """
     rx = {name: shared_rx(pattern_sets, name)
           for name in ("request", "correction", "acceptance")}
-    for name in ("vague", "concrete_criterion"):
+    for name in ("vague", "concrete_criterion", "reasoning"):
         rx[name] = _alt(pattern_sets, lambda ps, n=name: ps.get("axes", {}).get(n))
     rx["constraint"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("kyouka") or {})
                             .get("signals", {}).get("constraint"))
@@ -566,8 +566,11 @@ def _axis_correction_oneshot(by_session, rx):
         for p in corr_at:
             landed = not any(0 < q - p <= CORRECTION_CHAIN_GAP for q in corr_at)
             text = evs[idx[p]]["text"]
-            reasoned = ((rx["metacog"] and rx["metacog"].search(text))
-                        or (rx["rulemaking"] and rx["rulemaking"].search(text)))
+            # Reading the real corrections showed the topic vocabularies caught none of them:
+            # this operator explains by widening the scope ("not specific to X, this is about
+            # all of Y"), which is a shape, not a subject. `reasoning` covers that shape.
+            reasoned = any(r and r.search(text)
+                           for r in (rx["reasoning"], rx["metacog"], rx["rulemaking"]))
             if reasoned:
                 total += 1
                 if landed:
@@ -765,9 +768,12 @@ def open_questions(result, pattern_sets, cfg):
             "id": "attr_%s" % aid,
             "kind": "attribution",
             "type": tid,
-            "why": "%s: %d of %d %s (%s%%), against %s%% for %s%s. %s"
+            "why": "%s: %d of %d %s (%s%%), %s%s. %s"
                    % (label, ax["hits"], ax["n"], ax["unit"], ax["pct"],
-                      ax["base_pct"], ax["against"],
+                      ("against %s%% for %s" % (ax["base_pct"], ax["against"]))
+                      if ax["base_pct"] is not None
+                      else ("with nothing to compare against yet — only %d %s"
+                            % (ax["base_n"], ax["against"])),
                       " — a separation of %+.1f points, which is small enough that the number "
                       "may be the population rather than you" % ax["lift"]
                       if ax["undiscriminating"] and ax["lift"] is not None else "",
@@ -1022,6 +1028,21 @@ def _self_test():
     lifted = measure_effects(lift_tl, pats, cfg)["axes"]["gugenka"]
     check("a rate that separates from its baseline is not marked",
           lifted["lift"] == 100.0 and lifted["undiscriminating"] is False, str(lifted))
+
+    # -- a correction carries its reason as a *shape*, not as a subject vocabulary ---------
+    # Reading a real corpus showed every reasoned correction explaining by widening the scope,
+    # and the topic vocabularies (metacog, rulemaking) caught none of them.
+    scope_tl = [ev("user", "no, that is wrong — this is not specific to that screen, "
+                           "it applies to every screen", s="w1"),
+                ev("assistant", s="w1"),
+                ev("user", "no, that is wrong", s="w2"),
+                ev("assistant", s="w2"),
+                ev("user", "no, that is wrong again", s="w2")]
+    ons = measure_effects(scope_tl, pats, cfg)["axes"]["sousa_oneshot"]
+    check("a correction that explains by widening the scope counts as carrying a reason",
+          ons["n"] == 1 and ons["hits"] == 1, str(ons))
+    check("bare corrections go to the comparison side, which stays unrated while it is thin",
+          ons["base_n"] == 2 and ons["base_pct"] is None, str(ons))
 
     # -- Emitter's outcome: asking outright is only one of three ways to fill a gap ---------
     fill_tl = [ev("user", "i want it to end up like a single page, please build it", s="f1"),
