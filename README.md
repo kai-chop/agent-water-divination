@@ -79,6 +79,8 @@ outcome, its own denominator and its own unit, so they can move independently.
 | Manipulator | rules that reached a rule file, hook or config | rules declared |
 | Specialist | not a rate — see below | — |
 
+![Each aptitude measured against its own outcome, with its own denominator and its own unit](assets/six-axes.svg)
+
 The first version of this layer did it the obvious way: one outcome for everybody, and split the
 population by which vocabulary a request carried. Every type then landed within a few points of
 every other, all pointing the same direction, because that design measures one thing five times —
@@ -162,9 +164,24 @@ about twenty lines in `tools/nen_corpus.py`.
 
 ## ⚠ Measured limits
 
-- **English patterns are unmeasured.** The Japanese set was checked against a real 505-message
-  corpus; `patterns/en.json` was written by translating its intent and has only fixture coverage.
-  Treat English counts as weaker evidence until someone measures them.
+- **English patterns have measured specificity, unmeasured sensitivity.** The Japanese set was
+  checked against a real 505-message corpus. `patterns/en.json` was written by translating its
+  intent, and no English corpus of operator instructions has been run through it — so whether it
+  *catches* what it names is still unknown. What can be checked without such a corpus is the other
+  half: whether a pattern fires on writing nobody aimed at an agent.
+
+  ```
+  python tools/nen_signals.py --audit-patterns .
+  ```
+
+  Point it at any prose you have. Over this repo's own 150 paragraphs of documentation, the
+  loosest real pattern is English `constraint` at **6.0%** (documentation is unusually full of
+  "must" and "never"), then `attribution` at 4.7% and `verify` at 4.0%; everything else sits at
+  or below 3.3%. `concrete` matches 79.3% and is meant to — it exists to notice that a message
+  contains *any* identifier or number, and is used as a negative guard.
+
+  Treat English counts as weaker evidence than Japanese ones until someone measures the
+  sensitivity half.
 - **Pasted plain prose still gets through.** Detection catches long text carrying markdown
   structure, or long text that names its source in its first characters. An agent's plain-prose
   answer pasted with no attribution is still counted as yours. This is why the interview asks about

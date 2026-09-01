@@ -8,20 +8,28 @@ type, plus quotes to check. These are candidates. On the corpus this was built a
 detector's hits were false positives -- fiction dialogue and spec text that happened to contain a
 correction word. A number here is a reason to go read the original, not a finding.
 
+**Effects.** Whether exercising an aptitude changed anything, on six axes that each have their own
+outcome, denominator and unit -- see the comment above `measure_effects` for why one shared outcome
+cannot work. Plus the rare-event catalogue, which is how Specialist is measured: not a rate, but
+conjunctions that are hard to satisfy by accident.
+
 **Open questions.** The gap between what a regex can see and what a verdict needs, written as
-questions someone can actually answer. Three kinds:
+questions someone can actually answer:
 
 - `probe` -- the corpus could not produce two quotes for this type, so ask directly and watch the
   shape of the answer
 - `authorship` -- a quote heavy enough to carry a verdict is long enough to have been pasted
-- `occasion` -- a signal sits at zero, and zero has two meanings: no ability, or no opportunity.
-  Only the person can say which, and the difference decides whether it is a weakness at all.
+- `occasion` -- a signal or an axis sits at zero, and zero has two meanings: no ability, or no
+  opportunity. Only the person can say which, and the difference decides whether it is a weakness.
+- `attribution` -- an axis produced a rate; were the cases it counted the same kind of work?
+- `rare` -- a rare event fired; was it deliberate?
 
 Questions marked `blocking` are the ones a verdict may not be issued without. That gate lives in
 water_divination.py, which refuses to print a verdict while any blocking question is unanswered.
 
-特質系 (Specialist) has no detector on purpose. Its definition is "the combination the other five
-cannot explain", so any regex for it grants it to everybody.
+特質系 (Specialist) has no *signal* detector on purpose. Its definition is "the combination the
+other five cannot explain", so any regex scoring it would grant it to everybody; it is reached
+through the rare-event catalogue instead.
 
 Self-test: python tools/nen_signals.py --self-test
 """
@@ -307,10 +315,34 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
     }
 
 
-def _axis(label, unit, hits, total, detail=None, evidence=None):
+# One place the axes are described, so the diagram generator and the report cannot drift from
+# what the code actually counts.
+AXES = {
+    "kyouka": ("sessions that held their constraint", "sessions",
+               "A constraint you stated, and no correction in the rest of that session."),
+    "houshutsu": ("requests the agent could act on directly", "requests",
+                  "No clarifying question from the agent before it started."),
+    "henka": ("fuzzy starts that became checkable", "vague openings",
+              "'Something is off' followed, in the same session, by a criterion someone else "
+              "could apply."),
+    "gugenka": ("finish lines the agent actually checked against", "requests with a finish line",
+                "You said what done means, and the agent came back with evidence rather than "
+                "a claim."),
+    "sousa": ("rules that became machinery", "rules declared",
+              "Followed, in the same session, by a write into a rule file, hook or config."),
+}
+
+
+def axis_catalogue():
+    """[(type id, label, unit, detail)] -- what each axis counts, for anything that documents it."""
+    return [(tid,) + AXES[tid] for tid in AXES]
+
+
+def _axis(tid, hits, total, evidence=None):
+    label, unit, detail = AXES[tid]
     return {"label": label, "unit": unit, "n": total, "hits": hits,
             "pct": round(100.0 * hits / total, 1) if total >= MIN_N else None,
-            "enough": total >= MIN_N, "detail": detail or "",
+            "enough": total >= MIN_N, "detail": detail,
             "evidence": evidence or []}
 
 
@@ -332,17 +364,22 @@ def _axis_constraint_survival(by_session, rx):
         idx = _users(evs)
         if len(idx) < 3:
             continue
-        early = idx[:max(1, len(idx) // 3)]
-        if not any(rx["constraint"] and rx["constraint"].search(evs[i]["text"]) for i in early):
+        # The constraint has to be stated with enough of the session left for holding it to mean
+        # anything, but requiring the *first third* threw away most sessions -- constraints often
+        # arrive once the work has started. Anything before the final third counts, and what is
+        # measured is the stretch after it.
+        cutoff = len(idx) - max(1, len(idx) // 3)
+        stated = next((p for p in range(cutoff)
+                       if rx["constraint"] and rx["constraint"].search(evs[idx[p]]["text"])), None)
+        if stated is None:
             continue
         total += 1
-        rest = idx[len(early):]
+        rest = idx[stated + 1:]
         if not any(rx["correction"] and rx["correction"].search(evs[i]["text"]) for i in rest):
             clean += 1
-        elif len(ev) < 3:
-            ev.append(quote(evs[early[0]], 160))
-    return _axis("sessions that held their constraint", "sessions", clean, total,
-                 "A constraint stated in the first third, and no correction afterwards.", ev)
+            if len(ev) < 3:
+                ev.append(quote(evs[idx[stated]], 160))
+    return _axis("kyouka", clean, total, ev)
 
 
 def _axis_started_without_asking(by_session, rx):
@@ -363,8 +400,7 @@ def _axis_started_without_asking(by_session, rx):
                 started += 1
             elif len(ev) < 3:
                 ev.append(quote(evs[i], 160))
-    return _axis("requests the agent could act on directly", "requests", started, total,
-                 "No clarifying question from the agent before it started.", ev)
+    return _axis("houshutsu", started, total, ev)
 
 
 def _axis_vague_to_criterion(by_session, rx):
@@ -385,9 +421,7 @@ def _axis_vague_to_criterion(by_session, rx):
                 converted += 1
                 if len(ev) < 3:
                     ev.append(quote(evs[i], 160))
-    return _axis("fuzzy starts that became checkable", "vague openings", converted, total,
-                 "'Something is off' followed, in the same session, by a criterion someone "
-                 "else could apply.", ev)
+    return _axis("henka", converted, total, ev)
 
 
 def _axis_finish_line_verified(by_session, rx):
@@ -409,10 +443,7 @@ def _axis_finish_line_verified(by_session, rx):
                 verified += 1
                 if len(ev) < 3:
                     ev.append(quote(evs[i], 160))
-    return _axis("finish lines the agent actually checked against", "requests with a finish line",
-                 verified, total,
-                 "You said what done means, and the agent came back with evidence rather than "
-                 "a claim.", ev)
+    return _axis("gugenka", verified, total, ev)
 
 
 def _axis_rules_that_stuck(by_session, rx):
@@ -432,9 +463,7 @@ def _axis_rules_that_stuck(by_session, rx):
                 mechanised += 1
                 if len(ev) < 3:
                     ev.append(quote(evs[i], 160))
-    return _axis("rules that became machinery", "rules declared", mechanised, total,
-                 "Followed, in the same session, by a write into a rule file, hook or config.",
-                 ev)
+    return _axis("sousa", mechanised, total, ev)
 
 
 # ---------------------------------------------------------------- rare events
@@ -674,6 +703,46 @@ def open_questions(result, pattern_sets, cfg):
     return qs
 
 
+def audit_patterns(pattern_sets, texts):
+    """Fire every pattern at text that is *not* somebody instructing an agent, and count.
+
+    Sensitivity -- does a pattern catch the thing it is named for -- can only be measured against
+    a real corpus of the language in question. Specificity can be measured against any prose: a
+    pattern that fires on ordinary writing will also fire on ordinary messages, and its count then
+    means nothing. This is how a pattern set written for a language nobody has measured can still
+    be held to something.
+
+    Returns hits per pattern over the supplied texts. High is bad, except for the one pattern
+    whose job is to match broadly: `concrete` exists to notice that a message contains *any*
+    identifier or number, and it is used as a negative guard, so matching everywhere is correct.
+    """
+    rows = []
+    for ps in pattern_sets:
+        lang = ps.get("language", "?")
+        groups = [("types.%s" % tid, (t or {}).get("signals") or {})
+                  for tid, t in (ps.get("types") or {}).items()]
+        groups += [("shared", ps.get("shared") or {}), ("axes", ps.get("axes") or {}),
+                   ("effects", ps.get("effects") or {})]
+        for where, table in groups:
+            for name, pat in table.items():
+                if name.startswith("_") or not isinstance(pat, str):
+                    continue
+                try:
+                    rx = re.compile("(?i:%s)" % pat if ps.get("case_insensitive") else pat)
+                except re.error as exc:
+                    rows.append({"lang": lang, "where": where, "name": name,
+                                 "hits": None, "error": str(exc)})
+                    continue
+                hits = sum(1 for t in texts if rx.search(t))
+                rows.append({"lang": lang, "where": where, "name": name, "hits": hits,
+                             "broad_by_design": name in BROAD_BY_DESIGN,
+                             "pct": round(100.0 * hits / len(texts), 1) if texts else None})
+    return rows
+
+
+BROAD_BY_DESIGN = {"concrete"}
+
+
 def provisional_ranking(result):
     """Order the types by how much evidence exists, so the interview knows where the stakes are.
     Explicitly not a verdict: it ranks regex hits, and regex hits are candidates."""
@@ -852,6 +921,19 @@ def _self_test():
     check("one session contributes at most one of each rare event",
           measure_effects(long_session, pats, cfg)["rare"][0]["n"] == 1)
 
+    # -- pattern audit: specificity is measurable even where sensitivity is not ------------
+    rows = audit_patterns(pats, ["the quick brown fox", "nothing here matches anything"])
+    check("the audit reports every pattern in every language",
+          len(rows) >= 40 and {r["lang"] for r in rows} == {"en", "ja"}, str(len(rows)))
+    check("a pattern that matches nothing scores zero",
+          any(r["hits"] == 0 for r in rows))
+    loose = audit_patterns(pats, ["you must not do that", "you must not do that either"])
+    con = next(r for r in loose if r["name"] == "constraint" and r["lang"] == "en")
+    check("a pattern that fires on ordinary prose is caught by the audit",
+          con["hits"] == 2 and con["pct"] == 100.0, str(con))
+    check("the one deliberately broad pattern is marked, not reported as a fault",
+          all(r["broad_by_design"] for r in rows if r["name"] == "concrete"))
+
     print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1
 
@@ -859,6 +941,9 @@ def _self_test():
 def main():
     ap = argparse.ArgumentParser(description="signal counts for the water divination")
     ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--audit-patterns", metavar="DIR",
+                    help="fire every pattern at ordinary prose (.md/.txt) and report what sticks; "
+                         "a pattern that matches writing nobody aimed at an agent is too loose")
     ap.add_argument("--config")
     ap.add_argument("--since")
     ap.add_argument("--until")
@@ -867,6 +952,33 @@ def main():
 
     if args.self_test:
         return _self_test()
+
+    if args.audit_patterns:
+        import glob as _glob
+        cfg = corpus.load_config(args.config)
+        pats = load_patterns(cfg["patterns"])
+        paras = []
+        for path in sorted(_glob.glob(os.path.join(corpus.resolve(args.audit_patterns),
+                                                   "**", "*.*"), recursive=True)):
+            if os.path.splitext(path)[1].lower() not in (".md", ".txt"):
+                continue
+            with io.open(path, encoding="utf-8", errors="replace") as f:
+                paras += [p.strip() for p in re.split(r"\n\s*\n", f.read()) if p.strip()]
+        if not paras:
+            print("[audit] alive: paragraphs=0 -- nothing to audit (exit 2)")
+            return 2
+        rows = sorted(audit_patterns(pats, paras), key=lambda r: -(r["hits"] or 0))
+        print("[audit] alive: paragraphs=%d patterns=%d" % (len(paras), len(rows)))
+        print("hits on prose that was never aimed at an agent (high = too loose):")
+        for r in rows:
+            if r.get("error"):
+                print("  %-4s %-22s %-22s BAD REGEX %s"
+                      % (r["lang"], r["where"], r["name"], r["error"]))
+            else:
+                print("  %-4s %-22s %-22s %4d  %5s%%%s"
+                      % (r["lang"], r["where"], r["name"], r["hits"], r["pct"],
+                         "  (broad by design)" if r["broad_by_design"] else ""))
+        return 0
 
     cfg = corpus.load_config(args.config)
     base = cfg.get("_base") or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 486" width="1120" height="486" role="img" aria-label="each aptitude measured against its own outcome, with its own denominator">
+<title>each aptitude measured against its own outcome, with its own denominator</title>
+<rect width="1120" height="486" fill="#0b1315"/>
+<text x="560" y="44" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="20" fill="#e3ecea" text-anchor="middle" font-weight="700">Six aptitudes, six separate quantities</text>
+<text x="560" y="70" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#6e8380" text-anchor="middle" font-weight="400">different outcome, different denominator, different unit -- so they can disagree</text>
+<rect x="0" y="96" width="1120" height="306" fill="#101b1d" stroke="#26383c"/>
+<text x="24" y="118" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="10" fill="#6e8380" text-anchor="start" font-weight="400" letter-spacing="1.4">TYPE</text>
+<text x="250" y="118" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="10" fill="#6e8380" text-anchor="start" font-weight="400" letter-spacing="1.4">ITS OWN AXIS</text>
+<text x="850" y="118" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="10" fill="#6e8380" text-anchor="start" font-weight="400" letter-spacing="1.4">DENOMINATOR</text>
+<path d="M0 126 L1120 126" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,130) scale(0.42)"><path fill="#1d5a63" d="M13 18 L47 18 L42 74 L18 74 Z"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="155" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">強化系</text>
+<text x="148" y="155" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Enhancer</text>
+<text x="250" y="155" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#e3ecea" text-anchor="start" font-weight="400">sessions that held their constraint</text>
+<text x="850" y="155" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9db0ad" text-anchor="start" font-weight="400">sessions</text>
+<path d="M0 172 L1120 172" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,176) scale(0.42)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z" opacity=".55"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="201" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">放出系</text>
+<text x="148" y="201" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Emitter</text>
+<text x="250" y="201" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#e3ecea" text-anchor="start" font-weight="400">requests the agent could act on directly</text>
+<text x="850" y="201" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9db0ad" text-anchor="start" font-weight="400">requests</text>
+<path d="M0 218 L1120 218" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,222) scale(0.42)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><path fill="none" stroke="#101b1d" stroke-width="1.2" d="M17 40 q4 -4 8 0 t8 0 t8 0"/><path fill="none" stroke="#101b1d" stroke-width="1.2" d="M18 52 q4 -4 8 0 t8 0 t7 0"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="247" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">変化系</text>
+<text x="148" y="247" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Transmuter</text>
+<text x="250" y="247" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#e3ecea" text-anchor="start" font-weight="400">fuzzy starts that became checkable</text>
+<text x="850" y="247" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9db0ad" text-anchor="start" font-weight="400">vague openings</text>
+<path d="M0 264 L1120 264" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,268) scale(0.42)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><circle fill="#b7a888" cx="26" cy="45" r="1.4"/><circle fill="#b7a888" cx="34" cy="58" r="1.1"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="293" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">具現化系</text>
+<text x="148" y="293" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Conjurer</text>
+<text x="250" y="293" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#e3ecea" text-anchor="start" font-weight="400">finish lines the agent actually checked against</text>
+<text x="850" y="293" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9db0ad" text-anchor="start" font-weight="400">requests with a finish line</text>
+<path d="M0 310 L1120 310" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,314) scale(0.42)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><g><ellipse fill="#9ac25f" cx="30" cy="30" rx="8" ry="3.2"/></g><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="339" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">操作系</text>
+<text x="148" y="339" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Manipulator</text>
+<text x="250" y="339" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#e3ecea" text-anchor="start" font-weight="400">rules that became machinery</text>
+<text x="850" y="339" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9db0ad" text-anchor="start" font-weight="400">rules declared</text>
+<path d="M0 356 L1120 356" stroke="#26383c" stroke-width="1"/>
+<g transform="translate(24,360) scale(0.42)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><ellipse fill="#b7a888" cx="29" cy="30" rx="7" ry="2.4" transform="rotate(-18 29 30)"/><circle fill="#b7a888" cx="36" cy="44" r="1.3" opacity=".85"/><circle fill="#b7a888" cx="24" cy="57" r="1.6" opacity=".7"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="52" y="385" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="15" fill="#e3ecea" text-anchor="start" font-weight="700">特質系</text>
+<text x="148" y="385" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#4fc2cc" text-anchor="start" font-weight="400">Specialist</text>
+<text x="250" y="385" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#9ac25f" text-anchor="start" font-weight="400">not a rate -- a catalogue of rare events</text>
+<text x="850" y="385" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="12" fill="#9ac25f" text-anchor="start" font-weight="400">finds</text>
+<text x="24" y="428" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="12" fill="#6e8380" text-anchor="start" font-weight="400">The first version scored all five against one shared outcome. Every type landed within a few points of</text>
+<text x="24" y="448" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="12" fill="#6e8380" text-anchor="start" font-weight="400">every other, because that measures one thing five times.</text>
+</svg>
