@@ -26,5 +26,12 @@ jobs:
         run: python tools/nen_report.py --self-test
       - name: water_divination self-test
         run: python tools/water_divination.py --self-test
+      - name: nen_assets self-test
+        run: python tools/nen_assets.py --self-test
+      - name: committed assets match the pattern files
+        run: |
+          python tools/nen_assets.py
+          python tools/nen_assets.py --lang ja
+          git diff --exit-code -- assets
       - name: demo corpus runs end to end
         run: python tools/water_divination.py measure --since 2026-01-01 --config examples/demo.json --out out

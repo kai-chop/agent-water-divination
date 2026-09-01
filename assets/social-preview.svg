@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="agent-water-divination — measure the operator, not the model">
+<title>agent-water-divination — measure the operator, not the model</title>
+<rect width="1280" height="640" fill="#0b1315"/>
+<rect x="40" y="40" width="1200" height="560" fill="#101b1d" stroke="#26383c"/>
+<text x="640" y="132" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="20" fill="#4fc2cc" text-anchor="middle" font-weight="400" letter-spacing="2.5">agent-water-divination</text>
+<text x="640" y="200" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="46" fill="#e3ecea" text-anchor="middle" font-weight="700">Measure the operator,</text>
+<text x="640" y="252" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="46" fill="#e3ecea" text-anchor="middle" font-weight="700">not the model</text>
+<text x="640" y="300" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="16" fill="#9db0ad" text-anchor="middle" font-weight="400">Read your own messages back to you and name which of six</text>
+<text x="640" y="326" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="16" fill="#9db0ad" text-anchor="middle" font-weight="400">aptitudes your instructions actually show</text>
+<g transform="translate(236.7,360) scale(1.5)"><path fill="#1d5a63" d="M13 18 L47 18 L42 74 L18 74 Z"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="281.6666666666667" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">強化系</text>
+<text x="281.6666666666667" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Enhancer</text>
+<g transform="translate(380.0,360) scale(1.5)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z" opacity=".55"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="425.00000000000006" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">放出系</text>
+<text x="425.00000000000006" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Emitter</text>
+<g transform="translate(523.3,360) scale(1.5)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><path fill="none" stroke="#101b1d" stroke-width="1.2" d="M17 40 q4 -4 8 0 t8 0 t8 0"/><path fill="none" stroke="#101b1d" stroke-width="1.2" d="M18 52 q4 -4 8 0 t8 0 t7 0"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="568.3333333333334" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">変化系</text>
+<text x="568.3333333333334" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Transmuter</text>
+<g transform="translate(666.7,360) scale(1.5)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><circle fill="#b7a888" cx="26" cy="45" r="1.4"/><circle fill="#b7a888" cx="34" cy="58" r="1.1"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="711.6666666666666" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">具現化系</text>
+<text x="711.6666666666666" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Conjurer</text>
+<g transform="translate(810.0,360) scale(1.5)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><g><ellipse fill="#9ac25f" cx="30" cy="30" rx="8" ry="3.2"/></g><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="855.0" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">操作系</text>
+<text x="855.0" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Manipulator</text>
+<g transform="translate(953.3,360) scale(1.5)"><path fill="#1d5a63" d="M14 30 L46 30 L42 74 L18 74 Z"/><circle fill="#b7a888" cx="25" cy="52" r="2.2" opacity=".8"/><circle fill="#b7a888" cx="33" cy="42" r="1.5" opacity=".6"/><circle fill="#b7a888" cx="36" cy="61" r="1.1" opacity=".9"/><path fill="none" stroke="#4b6469" stroke-width="1.6" stroke-linejoin="round" d="M12 8 L18 74 L42 74 L48 8"/></g>
+<text x="998.3333333333334" y="512" font-family="Georgia,'Hiragino Mincho ProN','Yu Mincho',serif" font-size="17" fill="#e3ecea" text-anchor="middle" font-weight="700">特質系</text>
+<text x="998.3333333333334" y="532" font-family="ui-monospace,'Cascadia Mono',Consolas,monospace" font-size="11" fill="#6e8380" text-anchor="middle" font-weight="400">Specialist</text>
+<text x="640" y="578" font-family="system-ui,-apple-system,'Segoe UI',Roboto,'Hiragino Sans','Yu Gothic UI',Meiryo,sans-serif" font-size="13" fill="#6e8380" text-anchor="middle" font-weight="400">six aptitudes, after the Water Divination in HUNTER x HUNTER</text>
+</svg>

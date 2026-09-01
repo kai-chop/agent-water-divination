@@ -17,6 +17,8 @@ That is the whole entry point. It finds your transcripts, keeps only the message
 that window, counts the six types' signals, and then — this is the part that matters — prints what
 it could **not** settle, as questions to answer out loud.
 
+![Measure, then interview, then verdict — and the verdict is refused while a blocking question is unanswered](assets/gate.svg)
+
 ## Where the six come from
 
 The Water Divination is the aptitude test from Yoshihiro Togashi's *HUNTER × HUNTER*: you put your
@@ -32,6 +34,8 @@ the glass is a month of your own messages, and the reactions keep their original
 | 具現化系 Conjurer | shows sediment | Turning a vague ideal into a spec and a finish line |
 | 操作系 Manipulator | moves the leaf | Steering the agent's rules, not just fixing its output |
 | 特質系 Specialist | something else | A combination the other five cannot account for |
+
+![The six vessels, each showing the reaction its type is named for](assets/six-vessels.svg)
 
 This repo is not affiliated with, endorsed by, or licensed from the rights holders of
 *HUNTER × HUNTER*. Only the six-way framing is borrowed, as a reading of a published work.
@@ -133,9 +137,20 @@ tools/nen_corpus.py         finding transcripts, keeping only what you typed, sp
 tools/nen_signals.py        the six types' counts, and generating the open questions
 tools/nen_context.py        pulling a quote back out of the transcript with its context
 tools/nen_report.py         one self-contained HTML page, no network, both themes
+tools/nen_assets.py         the diagrams above, generated from patterns/*.json
 patterns/*.json             the six definitions, the regexes, and the probe questions
 skill/{en,ja}/SKILL.md      the judging discipline, for an agent to follow
+assets/                     diagrams (SVG) and the social preview card (PNG), committed
 ```
+
+Nothing in `assets/` is drawn by hand. Rename a type or add a language in `patterns/*.json`, run
+`python tools/nen_assets.py` (`--lang ja` for the Japanese set, `--png` to redraw the card if you
+have Pillow), and the pictures agree with the code again. The vessel geometry is imported from the
+report renderer, so the diagram in this README and the one in your own reading are the same drawing.
+
+GitHub cannot take an SVG in the social preview slot, so `assets/social-preview.png` is committed
+ready to use. There is no API for that setting — attach it once under
+**Settings → General → Social preview**.
 
 `skill/` is written for an AI agent to run the reading conversationally — the interview works far
 better spoken than filled into a JSON file by hand. Copy the directory into whatever your agent

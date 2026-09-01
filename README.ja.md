@@ -15,6 +15,8 @@ python tools/water_divination.py measure --since 2026-08-01
 入口はこれだけ。トランスクリプトを見つけ、その期間に**自分が打った発話だけ**を残し、6系統の
 シグナルを数える。そして——ここが本体ですが——**数値では決まらなかったことを質問として出す**。
 
+![計測 → 確認の対話 → 断定。blocking が未回答のあいだ断定は拒否される](assets/gate.ja.svg)
+
 ## 6系統はどこから来ているか
 
 水見式は、冨樫義博『HUNTER×HUNTER』に出てくる念能力の系統診断です。葉を浮かべたコップに手をかざすと、
@@ -29,6 +31,8 @@ python tools/water_divination.py measure --since 2026-08-01
 | 具現化系 | 不純物が現れる | 曖昧な理想を仕様と完成条件へ落とす力 |
 | 操作系 | 葉が動く | 出力を直すだけでなく、AIの判断規則そのものを整える力 |
 | 特質系 | それ以外の変化 | 他の5系統では説明できない独自の組み合わせ |
+
+![6つの器。それぞれの系統が名前の由来にしている水の変化を示している](assets/six-vessels.ja.svg)
 
 本リポジトリは『HUNTER×HUNTER』の権利者と一切関係がなく、許諾も受けていません。
 借りているのは6分類の枠組みだけで、公表された作品に対する一つの読みとして使っています。
@@ -125,9 +129,20 @@ tools/nen_corpus.py         トランスクリプトの発見・自分の発話�
 tools/nen_signals.py        6系統のシグナル計測と、確認事項の生成
 tools/nen_context.py        引用を原本から前後の文脈ごと引き直す
 tools/nen_report.py         自己完結のHTML1枚（ネットワーク不要・ライト/ダーク両対応）
+tools/nen_assets.py         上の図版を patterns/*.json から生成する
 patterns/*.json             6系統の定義・正規表現・プローブ質問
 skill/{en,ja}/SKILL.md      判定の規律（AIエージェント向け）
+assets/                     図版（SVG）と social preview カード（PNG）を同梱
 ```
+
+`assets/` の中身は**手描きではありません**。`patterns/*.json` で系統名を変えたり言語を足したら
+`python tools/nen_assets.py`（日本語は `--lang ja`、カードの描き直しは Pillow がある環境で `--png`）
+を走らせれば、図がコードに追いつきます。器の形状はレポート描画側から import しているので、
+READMEの図とあなた自身の読みのHTMLは**同じ図形**です。
+
+GitHub の social preview は SVG を受け付けないので、`assets/social-preview.png` を生成済みで
+同梱しています。この設定にはAPIが無いため、**Settings → General → Social preview** から
+一度だけ手で添付してください。
 
 `skill/` はAIエージェントが**対話でこの読みを進める**ための規律です。確認の質問は、JSONに手で
 埋めるより口頭で訊いた方がはるかに機能します。使っているエージェントのskill置き場へコピーしてください。

@@ -1,0 +1,4 @@
+# The generated diagrams are regenerated in CI and compared against these copies, so their line
+# endings have to be the same on every platform.
+*.svg text eol=lf
+*.png binary
