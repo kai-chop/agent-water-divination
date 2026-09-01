@@ -126,6 +126,15 @@ def run_measure(args):
             _print_axis({"label_en": label_of.get(ax["type"], ax["type"])}, ax)
     else:
         print("  nothing separated from its own baseline in this window.")
+        # a refusal with no route out is where a reading dies -- name the nearest one and
+        # what it would take
+        near = [a for a in eff["axes"].values()
+                if a.get("would_settle_at_n") and a.get("lift") is not None]
+        near.sort(key=lambda a: -(a["lift"] or 0))
+        for ax in near[:2]:
+            print("  closest: %s — %s %s%% vs %s%% (%d %s so far; ~%d would settle it)"
+                  % (label_of.get(ax["type"], ax["type"]), ax["label"], ax["pct"],
+                     ax["base_pct"], ax["n"], ax["unit"], ax["would_settle_at_n"]))
     for ax in against:
         print("  ! went the other way:")
         _print_axis({"label_en": label_of.get(ax["type"], ax["type"])}, ax)

@@ -329,8 +329,31 @@ def collect(cfg, since=None, until=None, attribution_rx=None):
 TIMELINE_FORMATS = ("claude-code", "codex")
 
 
-def _mechanism_hit(path, mechanism_rx):
-    return bool(path and mechanism_rx and mechanism_rx.search(path))
+# A rule becomes machinery when something is **written**. Matching the path alone counts reading
+# the file too, and reading is exactly what an agent does when you start talking about rules --
+# measured 2026-09-02, the hits behind this were 49 shell reads and 4 Read calls against 5 real
+# writes, and the axis reversed from +20.6pt to -8.3pt once writes were required. The tool name
+# was already being captured and simply never consulted.
+WRITE_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "apply_patch",
+               "create_file", "update_file", "str_replace_editor"}
+SHELL_TOOLS = {"Bash", "PowerShell", "exec", "shell", "run_command", "local_shell"}
+WRITE_CMD_RX = re.compile(
+    r"apply_patch|Set-Content|Out-File|Add-Content|Tee-Object|New-Item|Remove-Item"
+    r"|sed\s+-i|tee\b|>>|(?<![0-9\-])>(?!=)")
+
+
+def _is_write(tool, raw):
+    """Did this call write, rather than look? Unknown tools are not credited."""
+    if tool in WRITE_TOOLS:
+        return True
+    if tool in SHELL_TOOLS or isinstance(raw, str):
+        return bool(WRITE_CMD_RX.search(raw if isinstance(raw, str) else str(raw)))
+    return False
+
+
+def _mechanism_hit(path, mechanism_rx, tool="", raw=None):
+    return bool(path and mechanism_rx and mechanism_rx.search(path)
+                and _is_write(tool, raw if raw is not None else path))
 
 
 def _tool_events(blocks, ts, session, mechanism_rx, name_key="name"):
@@ -344,8 +367,9 @@ def _tool_events(blocks, ts, session, mechanism_rx, name_key="name"):
             path = str(inp.get("file_path") or inp.get("path") or "")
         else:
             path = ""
-        yield _event(ts, session, "tool", tool=b.get(name_key) or "?",
-                     mechanism=_mechanism_hit(path, mechanism_rx))
+        tool = b.get(name_key) or "?"
+        yield _event(ts, session, "tool", tool=tool,
+                     mechanism=_mechanism_hit(path, mechanism_rx, tool, inp))
 
 
 def _agent_flags(text, flags):
@@ -621,6 +645,27 @@ def _self_test():
         check("a write into a rules file is flagged as mechanism, a test run is not",
               [e["mechanism"] for e in evs if e["kind"] == "tool"] == [True, False],
               str([(e["tool"], e["mechanism"]) for e in evs if e["kind"] == "tool"]))
+
+        # The dominant false positive, and the one this fixture set did not have: an agent that
+        # *reads* a rule file when you start talking about rules. Path alone cannot tell the two
+        # apart, and on a real corpus the reads outnumbered the writes ten to one.
+        rules = "/repo/rules/style.md"
+        cases = [("Read", {"file_path": rules}, False),
+                 ("Grep", {"path": rules}, False),
+                 ("exec", "Get-Content %s -TotalCount 1" % rules, False),
+                 ("Bash", "cat %s | head -5" % rules, False),
+                 ("Edit", {"file_path": rules}, True),
+                 ("Write", {"file_path": rules}, True),
+                 ("apply_patch", "*** Update File: %s" % rules, True),
+                 ("exec", "Set-Content %s -Value x" % rules, True),
+                 ("Bash", "sed -i s/a/b/ %s" % rules, True),
+                 ("Bash", "echo rule >> %s" % rules, True)]
+        got = [_is_write(t, raw) and bool(re.search(r"rules?[/\\]", str(raw)))
+               for t, raw, _ in cases]
+        want = [w for _t, _r, w in cases]
+        check("reading a rule file is not the same as writing one",
+              got == want,
+              str([(c[0], str(c[1])[:28], g, w) for c, g, w in zip(cases, got, want) if g != w]))
         check("pasted text is marked in the timeline too, not just in the signal layer",
               [bool(e.get("paste")) for e in evs if e["kind"] == "user"] == [False, True])
 

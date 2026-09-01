@@ -378,16 +378,53 @@ def axes_of(tid):
     return [aid for aid in AXES if AXES[aid][0] == tid]
 
 
+def _wilson(hits, n, z=1.96):
+    """95% interval for a rate. Small n produces a wide one, which is the point: it is the only
+    thing standing between "3 of 4" and a verdict."""
+    import math
+    if not n:
+        return (None, None)
+    p = float(hits) / n
+    d = 1 + z * z / n
+    centre = p + z * z / (2 * n)
+    spread_ = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (round(100.0 * (centre - spread_) / d, 1), round(100.0 * (centre + spread_) / d, 1))
+
+
+def needed_n(hits, total, base_pct, cap=400):
+    """At this rate, how many observations would it take for the interval to clear the baseline?
+
+    A refusal with no route out is where a reading dies. This turns "not enough" into a number
+    you can come back with. Returns None if the rate is on the wrong side of the baseline.
+    """
+    if not total or base_pct is None:
+        return None
+    p = float(hits) / total
+    if 100.0 * p <= base_pct:
+        return None
+    n = total
+    while n < cap:
+        n += 1
+        lo, _hi = _wilson(int(round(p * n)), n)
+        if lo is not None and lo > base_pct:
+            return n
+    return None
+
+
 def _axis(axis_id, hits, total, evidence=None, base_hits=0, base_total=0):
     tid, label, unit, detail, against = AXES[axis_id]
     pct = round(100.0 * hits / total, 1) if total >= MIN_N else None
     base_pct = round(100.0 * base_hits / base_total, 1) if base_total >= MIN_N else None
     lift = round(pct - base_pct, 1) if (pct is not None and base_pct is not None) else None
-    # A number at the ceiling says nothing on its own: it may be you, or it may be that the
-    # outcome almost always happens. Either the baseline separates them, or the axis is flagged.
+    lo, hi = _wilson(hits, total)
+    # Two ways a number can mean nothing. It can sit level with its baseline -- or the baseline
+    # can fall inside the interval the rate itself is known to within, which is what "3 of 4"
+    # always does. Measured 2026-09-02: without this, a 4-observation axis led the reading.
+    inside = (lo is not None and base_pct is not None and lo <= base_pct <= hi)
     undiscriminating = (pct is not None
                         and (base_pct is None and pct >= CEILING
-                             or lift is not None and abs(lift) < LIFT_FLOOR))
+                             or lift is not None and abs(lift) < LIFT_FLOOR
+                             or inside))
     # The glass shows one reaction. An axis either showed something or it did not, and the ones
     # that did not are not weaknesses, gaps or homework -- they are simply not part of this
     # reading. Their numbers stay in the JSON for the ledger; the reading leaves them alone.
@@ -401,6 +438,8 @@ def _axis(axis_id, hits, total, evidence=None, base_hits=0, base_total=0):
             "pct": pct, "enough": total >= MIN_N, "detail": detail,
             "against": against, "base_n": base_total, "base_pct": base_pct, "lift": lift,
             "undiscriminating": undiscriminating, "showed": showed, "direction": direction,
+            "ci95": [lo, hi], "baseline_inside_ci": inside,
+            "would_settle_at_n": needed_n(hits, total, base_pct) if inside else None,
             "evidence": evidence or []}
 
 
@@ -1075,6 +1114,23 @@ def _self_test():
     check("a rate no different from its baseline is marked as saying nothing",
           flat["pct"] == 100.0 and flat["lift"] == 0.0 and flat["undiscriminating"] is True,
           str(flat))
+
+    # 3 of 4 is not evidence, however wide the gap looks: the interval a rate that small is known
+    # to within swallows almost any baseline. Measured 2026-09-02, an n=4 axis had led a reading.
+    thin_tl = []
+    for i in range(4):
+        thin_tl += [ev("user", "please fix it %d, done when tests pass" % i, s="t%d" % i),
+                    ev("assistant", verify=(i < 3), s="t%d" % i)]
+    for i in range(20):
+        thin_tl += [ev("user", "please fix it plainly %d" % i, s="u%d" % i),
+                    ev("assistant", verify=(i < 11), s="u%d" % i)]
+    thin = measure_effects(thin_tl, pats, cfg)["axes"]["gugenka"]
+    check("a 4-observation axis does not lead a reading, however wide the gap",
+          thin["n"] == 4 and thin["baseline_inside_ci"] is True and thin["showed"] is False,
+          str({k: thin[k] for k in ("n", "pct", "base_pct", "ci95", "showed")}))
+    check("a refusal names how many observations would settle it",
+          thin["would_settle_at_n"] and thin["would_settle_at_n"] > thin["n"],
+          str(thin["would_settle_at_n"]))
 
     lift_tl = list(base_tl[:12])
     for i in range(6):      # same, but without a finish line it never verifies
