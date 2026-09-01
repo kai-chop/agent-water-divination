@@ -98,7 +98,17 @@ tool working. Answer what it names and run it again.
 
 ## Rules for the judging
 
-0. **A divination names what showed. It does not enumerate what could not be measured.** The
+0a. **Always name a type.** A glass that shows nothing is a broken divination. Rigour lives in the
+   confidence and in the stated basis, never in whether an answer exists: from an axis when one
+   separated, otherwise from the largest spoke of the profile, with `basis` printed beside it.
+   The tool's `reading` gives you this; overriding it requires saying why. **Write
+   `verdict.portrait`** — one or two sentences describing the person in their own terms, built
+   from their quotes rather than pasted from the definition. That line is what they take away.
+0b. **The radar is a profile, not a scoreboard.** It is the share of messages carrying a type's
+   marks, not evidence anything worked. Never call a low spoke a weakness — say they did not
+   reach for it this period. A type with broad vocabulary reads high; `--audit-patterns` measures
+   how broad.
+0c. **A divination names what showed. It does not enumerate what could not be measured.** The
    glass gives one reaction. An axis that did not show is **not a weakness and not homework** —
    it is simply not part of this reading. Its numbers stay in the result JSON and the ledger; the
    verdict and the interview leave it alone. Writing "cannot be compared" over and over produces

@@ -76,6 +76,26 @@ letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
 font-size:clamp(1.3rem,3.6vw,1.9rem);line-height:1.4}
 .verdict-line b{color:var(--water);display:block;font-size:1.5em;margin-top:.2rem}
 .because{margin:.5rem 0 0;font-family:ui-monospace,monospace;font-size:.78rem;color:var(--faint)}
+.crown{display:flex;gap:1.6rem;align-items:center;flex-wrap:wrap;background:var(--surface);
+border:1px solid var(--line);padding:1.6rem 1.8rem}
+.crown .big{width:8.5rem;flex:0 0 auto}
+.crown .big svg{width:100%;height:auto}
+.crown .say{flex:1 1 18rem;min-width:15rem;display:flex;flex-direction:column;gap:.5rem}
+.crown .say h3{font-size:1.5rem}
+.crown .say p{margin:0;color:var(--soft);font-size:.93rem;line-height:1.8}
+.radar{width:100%;max-width:23rem;height:auto}
+.radar .ring{fill:none;stroke:var(--line);stroke-width:1}
+.radar .spoke{stroke:var(--line);stroke-width:1}
+.radar .shape{fill:var(--water);fill-opacity:.22;stroke:var(--water);stroke-width:2;
+stroke-linejoin:round}
+.radar .dot{fill:var(--water)}
+.radar .dot.lit{fill:var(--leaf);r:5}
+.radar .rl{font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;font-size:13px;
+fill:var(--text)}
+.radar .rl.lit{fill:var(--leaf);font-weight:700}
+.radar .rv{font-family:ui-monospace,monospace;font-size:10px;fill:var(--faint)}
+.shapewrap{display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap}
+.shapewrap .side{flex:1 1 15rem;min-width:14rem;color:var(--soft);font-size:.9rem}
 .verdict-line span{display:block;font-family:ui-monospace,monospace;font-size:.72rem;
 color:var(--faint);margin-top:.35rem;letter-spacing:.02em}
 .state{display:inline-block;font-family:ui-monospace,monospace;font-size:.66rem;letter-spacing:.14em;
@@ -166,6 +186,50 @@ code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.95em
 
 E = html.escape
 
+RADAR_R = 108        # outer ring
+RADAR_PAD = 74       # room for the labels outside it
+
+
+def _radar(rows, named=None):
+    """Six spokes, one shape. No sample-size gate touches this: a profile always has a shape,
+    and the shape is the thing a divination is for."""
+    if not rows:
+        return ""
+    import math
+    n = len(rows)
+    cx = cy = RADAR_R + RADAR_PAD
+    size = 2 * (RADAR_R + RADAR_PAD)
+
+    def point(i, frac):
+        a = -math.pi / 2 + 2 * math.pi * i / n
+        return (cx + RADAR_R * frac * math.cos(a), cy + RADAR_R * frac * math.sin(a))
+
+    out = ['<svg viewBox="0 0 %d %d" class="radar" role="img" aria-label="%s">'
+           % (size, size, E("六系統のかたち"))]
+    for ring in (0.25, 0.5, 0.75, 1.0):
+        pts = " ".join("%.1f,%.1f" % point(i, ring) for i in range(n))
+        out.append('<polygon points="%s" class="ring"/>' % pts)
+    for i in range(n):
+        x, y = point(i, 1.0)
+        out.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" class="spoke"/>'
+                   % (cx, cy, x, y))
+    shape = " ".join("%.1f,%.1f" % point(i, max(r["scaled"], 0) / 100.0)
+                     for i, r in enumerate(rows))
+    out.append('<polygon points="%s" class="shape"/>' % shape)
+    for i, r in enumerate(rows):
+        x, y = point(i, max(r["scaled"], 0) / 100.0)
+        out.append('<circle cx="%.1f" cy="%.1f" r="3.5" class="dot%s"/>'
+                   % (x, y, " lit" if r["type"] == named else ""))
+        lx, ly = point(i, 1.30)
+        anchor = "middle" if abs(lx - cx) < 6 else ("start" if lx > cx else "end")
+        out.append('<text x="%.1f" y="%.1f" text-anchor="%s" class="rl%s">%s</text>'
+                   % (lx, ly, anchor, " lit" if r["type"] == named else "", E(r["label"])))
+        out.append('<text x="%.1f" y="%.1f" text-anchor="%s" class="rv">%s</text>'
+                   % (lx, ly + 15, anchor,
+                      E("—" if r["dark"] else "%s%%" % r["pct"])))
+    out.append("</svg>")
+    return "".join(out)
+
 
 def _bar(name, s, scale):
     if s.get("pct") is None:
@@ -248,6 +312,35 @@ def render(data):
         out.append("<div class='fact'><dt>%s</dt><dd>%s<small>%s</small></dd></div>"
                    % (E(label), E(str(value)), E(sub)))
     out.append("</dl></header>")
+
+    # -- the named type, drawn large, in words meant for this reader ----------
+    if named:
+        t_big = next((t for t in data["types"] if t["id"] == named), None) or {}
+        portrait = (verdict.get("portrait")
+                    or "%s あなたの水は、そこで動いた。" % t_big.get("gloss", ""))
+        out.append("<section><div class='crown'>")
+        out.append("<div class='big'><svg viewBox='0 0 60 80' role='img' aria-label='%s'>"
+                   "%s%s</svg></div>"
+                   % (E("%s: %s" % (t_big.get("label_en", ""), t_big.get("reaction", ""))),
+                      GLASS.get(named, ""), GLASS_BODY))
+        out.append("<div class='say'><h3>%s</h3><p>%s</p><p style='color:var(--faint);"
+                   "font-size:.8rem'>%s</p></div>"
+                   % (E("%s / %s" % (t_big.get("label", named), t_big.get("label_en", ""))),
+                      E(portrait), E("器の反応: %s" % t_big.get("reaction", ""))))
+        out.append("</div></section>")
+
+    # -- the shape of the six, free of the sample-size machinery --------------
+    prof = data.get("profile")
+    if prof:
+        out.append("<section><h2>六つのかたち</h2><p class='note'>あなたの発話のうち、"
+                   "その系統の印を帯びていた割合。<b>効いたかどうかではなく、どこに寄っているか</b>"
+                   "——性格の形であって、成績ではない。特質系は認定された回だけ点灯する。</p>"
+                   "<div class='shapewrap'>%s<div class='side'>%s</div></div></section>"
+                   % (_radar(prof, named),
+                      E("最も高い系統を100として他を並べてある。低い系統は弱点ではなく、"
+                        "この期間その手をあまり使わなかったということ。"
+                        "なお広い語彙を持つ系統は高く出る——各パターンがどれだけ普通の文章に"
+                        "当たるかは tools/nen_signals.py --audit-patterns で測れる。")))
 
     # -- why it came out that way, in the operator's own words ----------------
     # This is what the article did and what the statistics layer had quietly replaced: three
@@ -524,6 +617,14 @@ def _self_test():
                                       "own": {"n": 1, "denom": 9, "pct": 11.1}},
             "telegraphic": {"all": {"n": 2, "denom": 44, "pct": 4.5},
                             "own": {"n": 2, "denom": 40, "pct": 5.0}}},
+        "profile": [
+            {"type": "sousa", "label": "操作系", "label_en": "Manipulator", "pct": 6.0,
+             "hits": 24, "dark": False, "scaled": 100.0},
+            {"type": "kyouka", "label": "強化系", "label_en": "Enhancer", "pct": 3.0,
+             "hits": 12, "dark": False, "scaled": 50.0},
+            {"type": "tokushitsu", "label": "特質系", "label_en": "Specialist", "pct": 0.0,
+             "hits": None, "dark": True, "scaled": 0.0},
+        ],
         "open_questions": [{"id": "probe_tokushitsu", "kind": "probe", "type": "tokushitsu",
                             "why": "not enough quotes", "ask": "Weave the three ideas into one.",
                             "observe": "does selection happen", "blocking": False}],
@@ -573,6 +674,14 @@ def _self_test():
           "水はこう動いた" in prov and "Manipulator" in prov and "PROVISIONAL" not in prov)
     check("the operator's own words carry the reason",
           "あなたの言葉から" in prov and "from now on" in prov)
+    check("the named type is drawn large, with its reaction named",
+          "class='crown'" in prov and "the leaf moves" in prov)
+    check("a radar of the six is drawn, and it is not a scoreboard",
+          "class=\"radar\"" in prov and "性格の形であって、成績ではない" in prov)
+    check("the radar marks the named spoke and dims an unrecognised Specialist",
+          'class="rl lit">操作系' in prov and ">—</text>" in prov)
+    check("the radar needs no sample-size gate to have a shape",
+          '<polygon points=' in prov and prov.count("class=\"ring\"") == 4)
 
     # The failure this replaced: a page that named nothing because no axis reached significance.
     # A glass that shows nothing is a broken divination, so a name is produced either way.

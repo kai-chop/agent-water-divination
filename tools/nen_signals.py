@@ -161,6 +161,12 @@ def measure(msgs, pattern_sets, cfg, samples=SAMPLES_PER_SIGNAL):
             entry["signals"] = None
             entry["reason"] = type_meta(pattern_sets, tid, "reason")
         else:
+            # how many of your messages lean this way at all -- the union across the type's
+            # signals, counted once per message. Taking the largest single signal instead would
+            # let a type with one loose pattern outrank a type with three precise ones.
+            union = _alt(pattern_sets, lambda ps, t=tid: "|".join(
+                v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
+            entry["messages_marked"] = sum(1 for m in own if union and union.search(m["text"]))
             for name in names:
                 rx = _alt(pattern_sets,
                           lambda ps, n=name: (ps.get("types", {}).get(tid) or {})
@@ -958,6 +964,39 @@ def audit_patterns(pattern_sets, texts):
 BROAD_BY_DESIGN = {"concrete"}
 
 
+def profile(result):
+    """The shape of the six across your own writing — a character reading, not a trial.
+
+    Deliberately free of the sample-size machinery that governs the axes. An axis asks "did this
+    work, and can you tell it from chance", which needs a denominator and often refuses. A profile
+    asks "where does your writing concentrate", which always has an answer and is what a
+    divination is actually for. The two live side by side and neither is allowed to wear the
+    other's clothes: `pct` here is share of your messages, never evidence that anything worked.
+
+    特質系 stays dark until it is recognised, because that is what it is: usually absent, and
+    worth something precisely when it is not.
+    """
+    own = result.get("own") or 0
+    rows = []
+    for t in result.get("types") or []:
+        if t.get("signals") is None:
+            recognised = bool(((result.get("verdict") or {}).get("roles") or {})
+                              .get(t["id"]) == "recognised")
+            rows.append({"type": t["id"], "label": t["label"], "label_en": t["label_en"],
+                         "pct": 100.0 if recognised else 0.0, "hits": None,
+                         "dark": not recognised})
+            continue
+        hits = t.get("messages_marked", 0)
+        rows.append({"type": t["id"], "label": t["label"], "label_en": t["label_en"],
+                     "pct": round(100.0 * hits / own, 1) if own else 0.0,
+                     "hits": hits, "dark": False})
+
+    top = max([r["pct"] for r in rows if not r["dark"]] or [1.0]) or 1.0
+    for r in rows:
+        r["scaled"] = round(100.0 * r["pct"] / top, 1) if not r["dark"] else 0.0
+    return rows
+
+
 def reading(result):
     """Always name a type, and say what the name rests on.
 
@@ -983,23 +1022,19 @@ def reading(result):
                 "axis": ax["id"]}
 
     # Nothing separated. That is a statement about this month's sample size, not about the
-    # person, so the reading falls back to what the article itself used: their own words.
-    scored = []
-    for t in result.get("types") or []:
-        if t.get("signals") is None:
-            continue
-        quotes = {(q["ts"], q["text"][:40])
-                  for qs in (t.get("quotes") or {}).values() for q in qs}
-        hits = sum(s["n"] for s in t["signals"].values())
-        scored.append((len(quotes), hits, t))
-    scored.sort(key=lambda s: (-s[0], -s[1]))
-    if not scored:
+    # person, so the reading falls back to what the article itself used: their own words. It
+    # ranks on the same number the radar draws, so the name and the shape cannot disagree --
+    # an earlier version ranked on quote count and named the type with the most *signals*.
+    rows = [r for r in profile(result) if not r["dark"]]
+    rows.sort(key=lambda r: -r["pct"])
+    if not rows or not rows[0]["hits"]:
         return None
-    nq, hits, t = scored[0]
-    return {"type": t["id"], "basis": "quotes", "headline": t["gloss"],
-            "confidence": "provisional" if nq >= QUOTES_FOR_VERDICT else "tentative",
-            "because": "%d verified quote(s) and %d signal hits across %s"
-                       % (nq, hits, ", ".join(t["signals"].keys())),
+    top = rows[0]
+    t = next((x for x in result.get("types") or [] if x["id"] == top["type"]), {})
+    return {"type": top["type"], "basis": "quotes", "headline": t.get("gloss", ""),
+            "confidence": "provisional" if top["pct"] >= 3.0 else "tentative",
+            "because": "あなたの発話の %s%%（%d件）がこの系統の印を帯びていた——六つのうち最も高い"
+                       % (top["pct"], top["hits"]),
             "axis": None}
 
 

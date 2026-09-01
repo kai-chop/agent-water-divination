@@ -102,6 +102,7 @@ def run_measure(args):
     # the reading always names something; the basis and the confidence carry the rigour
     result["reading"] = signals.reading(result)
     result["next_move"] = signals.next_move(result)
+    result["profile"] = signals.profile(result)
 
     os.makedirs(args.out, exist_ok=True)
     result_path = os.path.join(args.out, "divination.json")
