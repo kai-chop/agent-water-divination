@@ -203,7 +203,10 @@ def six_axes(types, w=1120, h=430, lang="en"):
     """Each aptitude against its own outcome. Drawn from signals.AXES, which is the same table
     the measurement reads, so the picture cannot claim an axis the code does not count."""
     en = lang != "ja"
-    cat = {tid: (label, unit, detail) for tid, label, unit, detail in signals.axis_catalogue()}
+    # a type can own more than one axis, so the table is grouped by type, not keyed by it
+    cat = {}
+    for _aid, tid, label, unit, _detail in signals.axis_catalogue():
+        cat.setdefault(tid, []).append((label, unit))
     body = [_text(w // 2, 44,
                   "Six aptitudes, six separate quantities" if en else "6つの適性に、6つの別々の量",
                   20, TEXT, SERIF, weight="700")]
@@ -214,8 +217,9 @@ def six_axes(types, w=1120, h=430, lang="en"):
 
     y = 96
     row_h = 46
+    rows = sum(max(1, len(cat.get(t["id"], []))) for t in types)
     body.append('<rect x="0" y="%d" width="%d" height="%d" fill="%s" stroke="%s"/>'
-                % (y, w, row_h * len(types) + 30, SURFACE, LINE))
+                % (y, w, row_h * rows + 30, SURFACE, LINE))
     body.append(_text(24, y + 22, "TYPE" if en else "系統", 10, FAINT, MONO,
                       anchor="start", spacing="1.4"))
     body.append(_text(250, y + 22, "ITS OWN AXIS" if en else "固有の軸", 10, FAINT, MONO,
@@ -223,18 +227,25 @@ def six_axes(types, w=1120, h=430, lang="en"):
     body.append(_text(850, y + 22, "DENOMINATOR" if en else "分母", 10, FAINT, MONO,
                       anchor="start", spacing="1.4"))
 
-    for i, t in enumerate(types):
-        top = y + 30 + i * row_h
-        entry = cat.get(t["id"])
-        body.append('<path d="M0 %d L%d %d" stroke="%s" stroke-width="1"/>' % (top, w, top, LINE))
-        body.append('<g transform="translate(24,%d) scale(0.42)">%s</g>'
-                    % (top + 4, inline_vessel(t["id"])))
-        body.append(_text(52, top + 29, t["label"], 15, TEXT, SERIF, anchor="start", weight="700"))
-        body.append(_text(148, top + 29, t.get("label_en", ""), 11, WATER, MONO, anchor="start"))
-        if entry:
-            body.append(_text(250, top + 29, entry[0], 13, TEXT, FONT, anchor="start"))
-            body.append(_text(850, top + 29, entry[1], 12, SOFT, MONO, anchor="start"))
-        else:
+    row = 0
+    for t in types:
+        entries = cat.get(t["id"], [])
+        for k, entry in enumerate(entries or [None]):
+            top = y + 30 + row * row_h
+            row += 1
+            body.append('<path d="M0 %d L%d %d" stroke="%s" stroke-width="1"/>'
+                        % (top, w, top, LINE))
+            if k == 0:      # the vessel and the name belong to the type, not to each axis
+                body.append('<g transform="translate(24,%d) scale(0.42)">%s</g>'
+                            % (top + 4, inline_vessel(t["id"])))
+                body.append(_text(52, top + 29, t["label"], 15, TEXT, SERIF,
+                                  anchor="start", weight="700"))
+                body.append(_text(148, top + 29, t.get("label_en", ""), 11, WATER, MONO,
+                                  anchor="start"))
+            if entry:
+                body.append(_text(250, top + 29, entry[0], 13, TEXT, FONT, anchor="start"))
+                body.append(_text(850, top + 29, entry[1], 12, SOFT, MONO, anchor="start"))
+                continue
             body.append(_text(250, top + 29,
                               "no axis -- what the other five do not explain" if en else
                               "軸を持たない ―― 他の5系統が説明しない残り", 13, LEAF, FONT,
@@ -247,7 +258,7 @@ def six_axes(types, w=1120, h=430, lang="en"):
             if en else
             "最初の実装は5系統に共通の結果変数を当てていた。全部が数ポイント差で並んだ——"
             "それは1つの量を5回測っているだけだから。")
-    ny = y + 30 + row_h * len(types) + 26
+    ny = y + 30 + row_h * rows + 26
     for j, line in enumerate(_wrap(note, 104 if en else 54)):
         body.append(_text(24, ny + j * 20, line, 12, FAINT, FONT, anchor="start"))
     h = max(h, ny + 24 * (len(_wrap(note, 104 if en else 54))) + 10)
@@ -436,9 +447,12 @@ def _self_test():
               "NO VERDICT" in blobs["gate.svg"])
         axes_svg = blobs["six-axes.svg"]
         check("the axes diagram is drawn from the catalogue the code counts from",
-              all(label in axes_svg for _tid, label, _u, _d in signals.axis_catalogue()))
+              all(label in axes_svg for _a, _t, label, _u, _d in signals.axis_catalogue()))
         check("the axes diagram names each axis's own denominator",
-              all(unit in axes_svg for _tid, _l, unit, _d in signals.axis_catalogue()))
+              all(unit in axes_svg for _a, _t, _l, unit, _d in signals.axis_catalogue()))
+        check("a type owning two axes gets a row for each",
+              len(signals.axes_of("sousa")) == 2
+              and all(signals.AXES[a][1] in axes_svg for a in signals.axes_of("sousa")))
         check("the type with no axis is shown as the leftover, not as a blank row",
               "do not explain" in axes_svg)
         # a diagram that drops the tail of its own sentence is the failure this guards

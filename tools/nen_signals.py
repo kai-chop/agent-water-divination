@@ -277,6 +277,8 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
                             .get("signals", {}).get("constraint"))
     rx["rulemaking"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
                             .get("signals", {}).get("rulemaking"))
+    rx["metacog"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
+                         .get("signals", {}).get("metacog"))
     rx["finished_image"] = _alt(pattern_sets,
                                 lambda ps: (ps.get("types", {}).get("houshutsu") or {})
                                 .get("signals", {}).get("finished_image"))
@@ -294,6 +296,7 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
         "henka": _axis_vague_to_criterion(by_session, rx),
         "gugenka": _axis_finish_line_verified(by_session, rx),
         "sousa": _axis_rules_that_stuck(by_session, rx),
+        "sousa_oneshot": _axis_correction_oneshot(by_session, rx),
     }
     type_rx = {tid: _alt(pattern_sets, lambda ps, t=tid: "|".join(
         v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
@@ -333,24 +336,33 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
 # denominator that is a subset of something, and the same outcome measured over the rest of that
 # something is the only way to tell "you are good at this" from "this number is always high".
 AXES = {
-    "kyouka": ("sessions that held their constraint", "sessions",
+    # axis id -> (type, label, unit, what it means, comparison population)
+    "kyouka": ("kyouka", "sessions that held their constraint", "sessions",
                "A constraint you stated, and no correction in the rest of that session.",
                "sessions where you stated no constraint"),
-    "houshutsu": ("requests the agent did not have to fill in", "requests",
+    "houshutsu": ("houshutsu", "requests the agent did not have to fill in", "requests",
                   "No question back, no stated assumption, no menu of options -- the picture "
                   "arrived complete enough to act on.",
                   "requests carrying no finished-picture wording"),
-    "henka": ("fuzzy starts that became checkable", "vague openings",
+    "henka": ("henka", "fuzzy starts that became checkable", "vague openings",
               "'Something is off' followed, in the same session, by a criterion someone else "
               "could apply.",
               "sessions that never started fuzzy"),
-    "gugenka": ("finish lines the agent actually checked against", "requests with a finish line",
+    "gugenka": ("gugenka", "finish lines the agent actually checked against",
+                "requests with a finish line",
                 "You said what done means, and the agent came back with evidence rather than "
                 "a claim.",
                 "requests with no finish line"),
-    "sousa": ("rules that became machinery", "rules declared",
-              "Followed, in the same session, by a write into a rule file, hook or config.",
+    "sousa": ("sousa", "rules that became machinery", "rules declared",
+              "Followed, before your next message, by a write into a rule file, hook or config.",
               "your other requests"),
+    # Second axis for the same type. Steering is two things -- making a rule stick, and making a
+    # correction land -- and a type can be strong at one and weak at the other.
+    "sousa_oneshot": ("sousa", "corrections that landed in one go",
+                      "corrections carrying a reason",
+                      "You said what was wrong and why, or what rule should prevent it, and did "
+                      "not have to correct the same thing again.",
+                      "bare corrections, with no reason attached"),
 }
 
 CEILING = 95.0     # above this, a rate needs a baseline before it can mean anything
@@ -358,12 +370,16 @@ LIFT_FLOOR = 3.0   # below this much separation from the baseline, the axis is n
 
 
 def axis_catalogue():
-    """[(type id, label, unit, detail)] -- what each axis counts, for anything that documents it."""
-    return [(tid,) + AXES[tid][:3] for tid in AXES]
+    """[(axis id, type, label, unit, detail)] -- for anything that documents what is counted."""
+    return [(aid, AXES[aid][0]) + AXES[aid][1:4] for aid in AXES]
 
 
-def _axis(tid, hits, total, evidence=None, base_hits=0, base_total=0):
-    label, unit, detail, against = AXES[tid]
+def axes_of(tid):
+    return [aid for aid in AXES if AXES[aid][0] == tid]
+
+
+def _axis(axis_id, hits, total, evidence=None, base_hits=0, base_total=0):
+    tid, label, unit, detail, against = AXES[axis_id]
     pct = round(100.0 * hits / total, 1) if total >= MIN_N else None
     base_pct = round(100.0 * base_hits / base_total, 1) if base_total >= MIN_N else None
     lift = round(pct - base_pct, 1) if (pct is not None and base_pct is not None) else None
@@ -372,8 +388,8 @@ def _axis(tid, hits, total, evidence=None, base_hits=0, base_total=0):
     undiscriminating = (pct is not None
                         and (base_pct is None and pct >= CEILING
                              or lift is not None and abs(lift) < LIFT_FLOOR))
-    return {"label": label, "unit": unit, "n": total, "hits": hits, "pct": pct,
-            "enough": total >= MIN_N, "detail": detail,
+    return {"id": axis_id, "type": tid, "label": label, "unit": unit, "n": total, "hits": hits,
+            "pct": pct, "enough": total >= MIN_N, "detail": detail,
             "against": against, "base_n": base_total, "base_pct": base_pct, "lift": lift,
             "undiscriminating": undiscriminating,
             "evidence": evidence or []}
@@ -529,6 +545,39 @@ def _axis_rules_that_stuck(by_session, rx):
                 base_total += 1
                 base_hits += 1 if mech else 0
     return _axis("sousa", hits, total, ev, base_hits, base_total)
+
+
+def _axis_correction_oneshot(by_session, rx):
+    """Manipulator, second axis: when you corrected, did it land the first time?
+
+    This is the measure the published reading was built on -- 43 of 48 corrections converging on
+    one pass. It came back with a comparison it did not have then: corrections that carried a
+    reason or a rule, against bare ones. That is the claim worth testing, because explaining the
+    cause is the thing this operator is said to do and the thing that would make it converge.
+
+    Landed = you did not correct again within the next CORRECTION_CHAIN_GAP messages of yours.
+    """
+    hits = total = base_hits = base_total = 0
+    ev = []
+    for evs in by_session.values():
+        idx = _users(evs)
+        corr_at = [p for p, i in enumerate(idx)
+                   if rx["correction"] and rx["correction"].search(evs[i]["text"])]
+        for p in corr_at:
+            landed = not any(0 < q - p <= CORRECTION_CHAIN_GAP for q in corr_at)
+            text = evs[idx[p]]["text"]
+            reasoned = ((rx["metacog"] and rx["metacog"].search(text))
+                        or (rx["rulemaking"] and rx["rulemaking"].search(text)))
+            if reasoned:
+                total += 1
+                if landed:
+                    hits += 1
+                    if len(ev) < 3:
+                        ev.append(quote(evs[idx[p]], 160))
+            else:
+                base_total += 1
+                base_hits += 1 if landed else 0
+    return _axis("sousa_oneshot", hits, total, ev, base_hits, base_total)
 
 
 # ---------------------------------------------------------------- the residual
@@ -694,12 +743,13 @@ def open_questions(result, pattern_sets, cfg):
                     "blocking": False,
                 })
 
-    for tid, ax in (result.get("effects", {}).get("axes") or {}).items():
+    for aid, ax in (result.get("effects", {}).get("axes") or {}).items():
+        tid = ax["type"]
         t = next((x for x in result["types"] if x["id"] == tid), None)
         label = (t or {}).get("label_en") or tid
         if not ax["enough"]:
             qs.append({
-                "id": "occ_axis_%s" % tid,
+                "id": "occ_axis_%s" % aid,
                 "kind": "occasion",
                 "type": tid,
                 "why": "The %s axis had only %d observation(s), too few to rate."
@@ -712,7 +762,7 @@ def open_questions(result, pattern_sets, cfg):
             })
             continue
         qs.append({
-            "id": "attr_%s" % tid,
+            "id": "attr_%s" % aid,
             "kind": "attribution",
             "type": tid,
             "why": "%s: %d of %d %s (%s%%), against %s%% for %s%s. %s"

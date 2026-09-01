@@ -119,24 +119,8 @@ def run_measure(args):
     print("\n--- what actually happened next (%d agent turns) ---" % eff["assistant_turns"])
     print("    six separate quantities, each with its own denominator, so they move independently")
     for t in result["types"]:
-        ax = eff["axes"].get(t["id"])
-        if not ax:
-            continue
-        if not ax["enough"]:
-            # the comparison side still carries the diagnosis: it says whether the outcome
-            # varies at all, which is what tells a thin axis from a pointless one
-            base = ("  (the %s ran %s%%)" % (ax["against"], ax["base_pct"])
-                    if ax["base_pct"] is not None else "")
-            print("  %-12s %-40s  only %d %s%s"
-                  % (t["label_en"], ax["label"], ax["n"], ax["unit"], base))
-            continue
-        base = ("vs %5s%% (%d %s)" % (ax["base_pct"], ax["base_n"], ax["against"])
-                if ax["base_pct"] is not None else "no baseline (%s: %d)"
-                % (ax["against"], ax["base_n"]))
-        lift = "  %+.1f pts" % ax["lift"] if ax["lift"] is not None else ""
-        print("  %-12s %-40s %5s%% (%d/%d)  %s%s%s"
-              % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], base, lift,
-                 "  <- says nothing" if ax["undiscriminating"] else ""))
+        for ax in [a for a in eff["axes"].values() if a["type"] == t["id"]]:
+            _print_axis(t, ax)
 
     res = eff["residual"]
     print("\n  Specialist — what the five do not explain")
@@ -162,6 +146,7 @@ def run_measure(args):
     if eff["blind_sources"]:
         print("  no agent side in: %s (nothing measurable there)"
               % ", ".join(eff["blind_sources"]))
+
     print("\n--- ask these before a verdict (%d blocking, %d total) ---"
           % (len(blocking), len(result["open_questions"])))
     for q in result["open_questions"]:
@@ -175,6 +160,27 @@ def run_measure(args):
     print("Fill in the answers file, then run: water_divination.py verdict "
           "--result %s --answers %s" % (result_path, answers_path))
     return 0
+
+
+def _print_axis(t, ax):
+    """One line per axis. A type may have more than one -- steering is both making a rule stick
+    and making a correction land, and those can disagree."""
+    if not ax["enough"]:
+        # the comparison side still carries the diagnosis: it says whether the outcome varies
+        # at all, which is what tells a thin axis from a pointless one
+        base = ("  (the %s ran %s%%)" % (ax["against"], ax["base_pct"])
+                if ax["base_pct"] is not None else "")
+        print("  %-12s %-40s  only %d %s%s"
+              % (t["label_en"], ax["label"], ax["n"], ax["unit"], base))
+        return
+    base = ("vs %5s%% (%d %s)" % (ax["base_pct"], ax["base_n"], ax["against"])
+            if ax["base_pct"] is not None else "no baseline (%s: %d)"
+            % (ax["against"], ax["base_n"]))
+    lift = "  %+.1f pts" % ax["lift"] if ax["lift"] is not None else ""
+    print("  %-12s %-40s %5s%% (%d/%d)  %s%s%s"
+          % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], base, lift,
+             "  <- says nothing" if ax["undiscriminating"] else ""))
+
 
 
 def _answers_template(result):
