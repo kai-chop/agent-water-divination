@@ -123,8 +123,8 @@ def six_vessels(types, w=1120, h=330):
     body = ['<rect x="1" y="1" width="%d" height="%d" fill="%s" stroke="%s"/>'
             % (w - 2, h - 2, SURFACE, LINE)]
     body.append(_text(w // 2, 46, "The six vessels", 20, TEXT, SERIF, weight="700"))
-    body.append(_text(w // 2, 72, "which way the water changes is which type you are",
-                      13, FAINT))
+    # "the water" would be wrong: five reactions happen to the water and the sixth to the leaf
+    body.append(_text(w // 2, 72, "which way the glass reacts is which type you are", 13, FAINT))
 
     n = len(types) or 1
     col = w / n

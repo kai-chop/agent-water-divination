@@ -85,6 +85,19 @@ def run_measure(args):
         return 2
 
     result["asked_window"] = {"since": since, "until": until}
+
+    # the effect layer: what the agent did after you spoke. Needs the turns the signal layer
+    # throws away, so it is a second pass over the same stores.
+    flag_rx = {name: signals._alt(pats, lambda ps, n=name: ps.get("effects", {}).get(n))
+               for name in ("misread", "question", "verify")}
+    flag_rx["question"] = signals._alt(
+        pats, lambda ps: ps.get("effects", {}).get("agent_question"))
+    flag_rx["verify"] = signals._alt(
+        pats, lambda ps: ps.get("effects", {}).get("verification"))
+    mech_rx = signals._alt(pats, lambda ps: ps.get("effects", {}).get("mechanism_path"))
+    tl, blind = corpus.collect_timeline(cfg, since, until, flag_rx, mech_rx, attrib)
+    result["effects"] = signals.measure_effects(tl, pats, cfg, blind)
+
     result["open_questions"] = signals.open_questions(result, pats, cfg)
     result["provisional"] = signals.provisional_ranking(result)
 
@@ -102,6 +115,41 @@ def run_measure(args):
     print("\n%d message(s) of yours across %d session(s)." % (result["own"], result["sessions"]))
     print("Provisional order (regex hits, NOT a verdict): "
           + ", ".join("%s %d" % (p["label_en"], p["hits"]) for p in result["provisional"]))
+
+    eff = result["effects"]
+    print("\n--- what actually happened next (%d agent turns) ---" % eff["assistant_turns"])
+    print("    six separate quantities, each with its own denominator, so they move independently")
+    for t in result["types"]:
+        ax = eff["axes"].get(t["id"])
+        if not ax:
+            continue
+        if not ax["enough"]:
+            print("  %-12s %-42s  only %d %s" % (t["label_en"], ax["label"], ax["n"], ax["unit"]))
+            continue
+        print("  %-12s %-42s  %5s%%  (%d/%d %s)"
+              % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], ax["unit"]))
+
+    rare = eff["rare"]
+    print("\n  Specialist — rare events found: %d" % len(rare))
+    for r in rare:
+        print("    * %s  x%d" % (r["label"], r["n"]))
+        if r["evidence"]:
+            print("      %s  %s" % (r["evidence"][0]["ts"], r["evidence"][0]["text"][:88]))
+    if not rare:
+        print("    none this window. These need three or four things to line up in order;"
+              " most windows have none.")
+
+    mr = eff["misreads"]
+    if mr["per_100_agent_turns"] is not None:
+        trend = ""
+        if mr["first_half"] and mr["second_half"]:
+            trend = "  (%s -> %s across the window)" % (mr["first_half"]["per_100"],
+                                                        mr["second_half"]["per_100"])
+        print("\n  agent-admitted misreads %d = %s per 100 agent turns%s"
+              % (mr["n"], mr["per_100_agent_turns"], trend))
+    if eff["blind_sources"]:
+        print("  no agent side in: %s (nothing measurable there)"
+              % ", ".join(eff["blind_sources"]))
     print("\n--- ask these before a verdict (%d blocking, %d total) ---"
           % (len(blocking), len(result["open_questions"])))
     for q in result["open_questions"]:

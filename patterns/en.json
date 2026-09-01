@@ -62,10 +62,22 @@
       "label": "特質系",
       "label_en": "Specialist",
       "gloss": "A combination the other five cannot account for",
-      "reaction": "something else entirely",
+      "reaction": "the leaf withers or dissolves",
       "signals": null,
       "reason": "Its definition is 'what the other five cannot explain', so any regex written for it would grant it to everyone. It is recognised only with two verified quotes plus one line each on why the other five do not already explain them."
     }
+  },
+  "_effects": "The effect layer reads what happened AFTER you spoke: the agent's replies and its tool calls. `misread` catches the agent admitting it read something wrong; `mechanism_path` catches an instruction being written into a rule file, hook or config -- the moment an instruction stops depending on anyone remembering it.",
+  "effects": {
+    "misread": "\\b(misread|misunderstood|i had it backwards|i was wrong about|read that wrong|got that wrong|i assumed .{0,30} but)\\b",
+    "mechanism_path": "(hooks?[/\\\\]|rules?[/\\\\]|AGENTS\\.md|CLAUDE\\.md|SKILL\\.md|\\.cursorrules|settings\\.json|config\\.(json|ya?ml|toml))",
+    "agent_question": "\\b(which (one|of these)|do you want me to|should i|would you like me to|before i (start|proceed)|to confirm|just to check|did you mean)\\b",
+    "verification": "\\b(exit 0|exit code 0|tests? pass(ed)?|all pass|\\d+/\\d+ pass|verified|i ran it|the output was|reproduced)\\b"
+  },
+  "_axes": "The operator's own vocabulary that each independent axis needs. Kept apart from `types` because these are read to detect a transition inside a session, not to score a message.",
+  "axes": {
+    "vague": "\\b(something('s| is) off|not quite|feels? (wrong|off)|somehow|a bit weird|hard to say|you know what i mean|meh)\\b",
+    "concrete_criterion": "\\b(threshold|above \\d|below \\d|within \\d|criteri(on|a)|the test is|measurable|observable|counts? as|define it as|\\d+ ?(ms|px|%|s\\b))"
   },
   "probes": {
     "_note": "Asked only for a type the corpus could not produce two quotes for. What is observed is the shape of the answer, not whether it is right.",

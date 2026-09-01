@@ -38,8 +38,11 @@ operator's own language. Three kinds:
 - **probe** — the corpus produced fewer than two quotes for a type, so ask its probe question and
   watch **the shape of the answer**, not whether it is correct. Each probe ships with what to
   watch for.
-- **occasion** — a signal sits at zero. Zero means no ability or no opportunity, and only they
-  know which. This distinction decides whether it is a weakness at all.
+- **occasion** — a signal or an axis sits at zero, or has too few observations to rate. Zero means
+  no ability or no opportunity, and only they know which. This decides whether it is a weakness.
+- **attribution** — an axis produced a rate. Ask whether the cases it counted were the same kind
+  of work as the rest. A number that only holds on easy work is not an aptitude.
+- **rare** — a rare event fired. Show them the moment and ask whether it was deliberate.
 
 Record each answer in `out/answers.json` as `{"answer": "...", "note": "what you observed"}`.
 For a probe, `answer` is `pass` or `fail` and the note says what you saw in their reply.
@@ -69,10 +72,15 @@ tool working. Answer what it names and run it again.
 1. **Two verified quotes, or no naming.** A type is named only with (a) a signal count you can
    state and (b) two quotes read in their original context. One without the other is `undetermined`,
    never a weak yes.
-2. **The Specialist type must be argued in the negative.** Name its two quotes and say, in one line
-   each, why the other five do not already explain them. If that line cannot be written, the type is
-   not recognised this time. Its definition is "what the other five cannot explain", so anything
-   less makes everyone a Specialist.
+2. **Where a type has an axis, the axis outranks the vocabulary.** Counting the words tells you the
+   aptitude was exercised; the axis is the only thing that says it worked. A type with a strong
+   signal and a weak axis is a habit, not an aptitude — say exactly that. A type whose axis had too
+   few observations falls back to the vocabulary, and the reading says which one it rested on.
+3. **Specialist is recognised from finds, not from a count.** Take the rare events the tool
+   surfaced, show the operator the moment, and keep only the ones they confirm were deliberate.
+   Two confirmed finds recognise the type; describe what the combination was, in their terms.
+   With none, it is simply not recognised this window — that is the ordinary outcome, not a gap.
+   Never argue Specialist from a signal count; it has no detector for the reason in the README.
 3. **Never fold ambiguity into a weakness.** When evidence points both ways, give both readings and
    say which way it leans. Rewriting a neutral or forced move as a flaw to look rigorous makes the
    reading worthless, and it is the most common way this goes wrong.

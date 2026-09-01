@@ -38,10 +38,13 @@ GLASS = {
                 '<circle class="sp" cx="34" cy="58" r="1.1"/>'),
     "sousa": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
               '<g class="spin"><ellipse class="lf" cx="30" cy="30" rx="8" ry="3.2"/></g>'),
+    # the leaf withers and breaks up -- in the original this is the one reaction that is not a
+    # change in the water at all, which is why it reads as its own category rather than a degree
     "tokushitsu": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
-                   '<circle class="sp" cx="25" cy="52" r="2.2" opacity=".8"/>'
-                   '<circle class="sp" cx="33" cy="42" r="1.5" opacity=".6"/>'
-                   '<circle class="sp" cx="36" cy="61" r="1.1" opacity=".9"/>'),
+                   '<ellipse class="sp" cx="29" cy="30" rx="7" ry="2.4"'
+                   ' transform="rotate(-18 29 30)"/>'
+                   '<circle class="sp" cx="36" cy="44" r="1.3" opacity=".85"/>'
+                   '<circle class="sp" cx="24" cy="57" r="1.6" opacity=".7"/>'),
 }
 GLASS_BODY = '<path class="g" d="M12 8 L18 74 L42 74 L48 8"/>'
 
@@ -123,6 +126,19 @@ font-size:.92rem;line-height:1.75}
 blockquote cite{display:block;margin-top:.45rem;font-style:normal;font-family:ui-monospace,monospace;
 font-size:.65rem;color:var(--faint)}
 .read{margin:0;font-size:.89rem;color:var(--soft)}
+.axis{background:var(--surface2);padding:.8rem 1rem;display:flex;flex-direction:column;gap:.2rem}
+.axis .tag{font-family:ui-monospace,monospace;font-size:.6rem;letter-spacing:.14em;
+color:var(--water)}
+.axis-n{margin:0;font-family:ui-monospace,monospace;font-size:1.3rem;
+font-variant-numeric:tabular-nums;color:var(--text)}
+.axis-n span{font-family:inherit;font-size:.74rem;color:var(--faint)}
+.axis-n.thin{font-size:.95rem;color:var(--faint)}
+.finds{display:flex;flex-direction:column;gap:1rem}
+.find{background:var(--surface);border:1px solid var(--leaf);padding:1.2rem 1.3rem;
+display:flex;flex-direction:column;gap:.55rem;position:relative}
+.find h3{font-size:1.1rem}
+.find .count{position:absolute;top:1.1rem;right:1.3rem;font-family:ui-monospace,monospace;
+font-size:.72rem;color:var(--leaf)}
 table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.85rem}
 .scroll{overflow-x:auto;border:1px solid var(--line)}
 th,td{padding:.65rem .85rem;text-align:left;border-bottom:1px solid var(--line)}
@@ -241,10 +257,60 @@ def render(data):
                     out.append("<blockquote>%s<cite>%s &nbsp;/&nbsp; %s</cite></blockquote>"
                                % (E(q["text"]), E(q["ts"]), E(name)))
                     break
+        ax = (data.get("effects", {}).get("axes") or {}).get(t["id"])
+        if ax:
+            out.append("<div class='axis'>")
+            out.append("<span class='tag'>DID IT WORK</span>")
+            if ax["enough"]:
+                out.append("<p class='axis-n'>%s%% &nbsp;<span>%d of %d %s</span></p>"
+                           % (ax["pct"], ax["hits"], ax["n"], E(ax["unit"])))
+            else:
+                out.append("<p class='axis-n thin'>only %d %s &nbsp;<span>too few to rate</span></p>"
+                           % (ax["n"], E(ax["unit"])))
+            out.append("<p class='why'>%s — %s</p>" % (E(ax["label"]), E(ax["detail"])))
+            out.append("</div>")
         if reads.get(t["id"]):
             out.append("<p class='read'>%s</p>" % E(reads[t["id"]]))
         out.append("</article>")
     out.append("</div></section>")
+
+    # -- the rare ones --------------------------------------------------------
+    eff = data.get("effects") or {}
+    if "rare" in eff:
+        rare = eff["rare"]
+        out.append("<section><h2>The rare ones</h2><p class='note'>Specialist is not a rate. Each "
+                   "of these needs three or four things to line up, in order and close together, "
+                   "so most windows turn up none. Rare by construction — there is no "
+                   "cross-operator baseline here, and inventing one would be a fabrication.</p>")
+        if rare:
+            out.append("<div class='finds'>")
+            for r in rare:
+                out.append("<article class='find'><h3>%s</h3><span class='count'>&times;%d</span>"
+                           % (E(r["label"]), r["n"]))
+                out.append("<p class='why'>%s</p>" % E(r["definition"]))
+                for q in r["evidence"][:2]:
+                    out.append("<blockquote>%s<cite>%s</cite></blockquote>"
+                               % (E(q["text"]), E(q["ts"])))
+                out.append("</article>")
+            out.append("</div>")
+        else:
+            out.append("<div class='qs'><div class='q'><p class='ask'>None in this window.</p>"
+                       "<p class='why'>That is the expected result. These are finds, not scores.</p>"
+                       "</div></div>")
+        mr = eff.get("misreads") or {}
+        if mr.get("per_100_agent_turns") is not None:
+            trend = ""
+            if mr.get("first_half") and mr.get("second_half"):
+                trend = " — %s then %s per 100 across the window" % (
+                    mr["first_half"]["per_100"], mr["second_half"]["per_100"])
+            out.append("<p class='read' style='margin-top:1.2rem'>Across %d agent turns, the agent "
+                       "admitted misreading you %d times (%s per 100)%s. %s</p>"
+                       % (eff.get("assistant_turns", 0), mr["n"], mr["per_100_agent_turns"],
+                          E(trend), E(mr.get("note", ""))))
+        if eff.get("blind_sources"):
+            out.append("<p class='read'>No agent side in: %s — nothing measurable there.</p>"
+                       % E(", ".join(eff["blind_sources"])))
+        out.append("</section>")
 
     # -- interview ------------------------------------------------------------
     qs = data.get("open_questions") or []
@@ -350,6 +416,21 @@ def _self_test():
         "open_questions": [{"id": "probe_tokushitsu", "kind": "probe", "type": "tokushitsu",
                             "why": "not enough quotes", "ask": "Weave the three ideas into one.",
                             "observe": "does selection happen", "blocking": False}],
+        "effects": {
+            "assistant_turns": 400,
+            "axes": {"sousa": {"label": "rules that became machinery", "unit": "rules declared",
+                               "n": 12, "hits": 10, "pct": 83.3, "enough": True,
+                               "detail": "Followed by a write into a rule file.",
+                               "evidence": []}},
+            "rare": [{"key": "mechanised_lesson", "label": "A lesson that became machinery",
+                      "definition": "A correction, then a rule, then a rule file.", "n": 1,
+                      "evidence": [{"ts": "2026-08-09T10:00", "text": "from now on <print> it",
+                                    "session": "s", "source": "", "chars": 20, "paste": None}]}],
+            "misreads": {"n": 3, "per_100_agent_turns": 0.75,
+                         "first_half": {"n": 2, "per_100": 1.0},
+                         "second_half": {"n": 1, "per_100": 0.5}, "note": "self-reported only."},
+            "blind_sources": ["jsonl"],
+        },
     }
 
     prov = render(data)
@@ -365,6 +446,15 @@ def _self_test():
     check("the type with no detector says so", "No detector, by design" in prov)
     check("the source of the six types is credited",
           "HUNTER" in prov and "Togashi" in prov)
+    check("each type carries its own effect axis, not a shared one",
+          "DID IT WORK" in prov and "rules that became machinery" in prov)
+    check("a rare find is shown with its moment",
+          "A lesson that became machinery" in prov
+          and "from now on &lt;print&gt; it" in prov)
+    check("the rare section says rarity is by construction, not versus other people",
+          "no cross-operator baseline" in prov)
+    check("a corpus with no agent side is named as unmeasurable, not as zero effect",
+          "No agent side in: jsonl" in prov)
     check("a zero-hit signal renders without a bar width",
           'class="f zero"' in render(dict(data, types=[
               dict(data["types"][0], signals={"x": {"n": 0, "denom": 40, "pct": 0.0}},

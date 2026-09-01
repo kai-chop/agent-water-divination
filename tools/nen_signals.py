@@ -120,8 +120,10 @@ def spread(items, k):
 
 
 def quote(m, limit=240):
-    return {"ts": m["ts"][:16], "session": m["session"], "source": m["source"],
-            "chars": len(m["text"]), "paste": m["paste"], "text": m["text"][:limit]}
+    """Works for both shapes we carry: corpus messages and timeline events (which have no
+    `source`/`paste` because the timeline reads whole sessions, not just your messages)."""
+    return {"ts": m["ts"][:16], "session": m["session"], "source": m.get("source", ""),
+            "chars": len(m["text"]), "paste": m.get("paste"), "text": m["text"][:limit]}
 
 
 def rate(n, d):
@@ -227,6 +229,328 @@ def _oneshot(pool, corr_rx):
     return rate(total - chained, total)
 
 
+# ---------------------------------------------------------------- effect
+
+MIN_N = 4             # observations an axis needs before it reports a rate at all
+LOOKAHEAD_TOOLS = 60  # cap on tool calls counted between two of your messages
+
+# Each aptitude gets its **own outcome variable**, with its own denominator and its own unit.
+#
+# The first version of this layer scored all five detectable types against one shared outcome --
+# whether your next message was a correction -- and split the population by which vocabulary the
+# request carried. Every type then came out within a few points of every other, all in the same
+# direction, because that design measures one thing five times: longer requests carry more of
+# every vocabulary and are harder. Adjusting for length would have papered over a structural
+# fault. Six aptitudes need six quantities that can move independently, or the profile has no
+# shape to read.
+#
+#   Enhancer     sessions that stated a constraint early -> ran to the end without a correction
+#   Emitter      your requests -> the agent started work instead of asking you what you meant
+#   Transmuter   session topics that began vague -> a checkable criterion appeared later
+#   Conjurer     requests carrying a finish line -> the agent actually showed it had verified
+#   Manipulator  rules you declared -> written into a rule file, and not repeated afterwards
+#   Specialist   no machine axis, same as its signal: it is the combination the others can't
+#                explain, so any quantity invented for it would grant it to everyone.
+
+
+def measure_effects(events, pattern_sets, cfg, blind_sources=()):
+    """Six independent axes, plus the rare-event catalogue.
+
+    Every axis has its own outcome, its own denominator and its own unit, so they can move
+    independently of each other. An axis with fewer than MIN_N observations reports `None` and
+    says how many it had, rather than a rate computed from three data points.
+    """
+    rx = {name: shared_rx(pattern_sets, name)
+          for name in ("request", "correction", "acceptance")}
+    for name in ("vague", "concrete_criterion"):
+        rx[name] = _alt(pattern_sets, lambda ps, n=name: ps.get("axes", {}).get(n))
+    rx["constraint"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("kyouka") or {})
+                            .get("signals", {}).get("constraint"))
+    rx["rulemaking"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
+                            .get("signals", {}).get("rulemaking"))
+    if rx["correction"] is None:
+        rx["correction"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
+                                .get("signals", {}).get("correction"))
+
+    by_session = defaultdict(list)
+    for e in events:
+        by_session[e["session"]].append(e)
+
+    axes = {
+        "kyouka": _axis_constraint_survival(by_session, rx),
+        "houshutsu": _axis_started_without_asking(by_session, rx),
+        "henka": _axis_vague_to_criterion(by_session, rx),
+        "gugenka": _axis_finish_line_verified(by_session, rx),
+        "sousa": _axis_rules_that_stuck(by_session, rx),
+    }
+    rare = _rare_events(by_session, rx)
+
+    agent_turns = sum(1 for e in events if e["kind"] == "assistant")
+    misreads = sum(1 for e in events if e["misread"])
+    halves = _misread_halves(events)
+    return {
+        "axes": axes,
+        "rare": rare,
+        "assistant_turns": agent_turns,
+        "misreads": {
+            "n": misreads,
+            "per_100_agent_turns": round(100.0 * misreads / agent_turns, 2)
+            if agent_turns else None,
+            "first_half": halves[0], "second_half": halves[1],
+            "note": "Counted from the agent admitting it read something wrong. It cannot see a "
+                    "misread nobody noticed, so a fall can mean fewer misreads or less candour.",
+        },
+        "blind_sources": list(blind_sources),
+        "caveat": "Each axis is an association inside your own corpus, not a cause and not a "
+                  "comparison with anyone else. The interview asks, per axis, whether the two "
+                  "sides were the same kind of work.",
+    }
+
+
+def _axis(label, unit, hits, total, detail=None, evidence=None):
+    return {"label": label, "unit": unit, "n": total, "hits": hits,
+            "pct": round(100.0 * hits / total, 1) if total >= MIN_N else None,
+            "enough": total >= MIN_N, "detail": detail or "",
+            "evidence": evidence or []}
+
+
+def _users(evs):
+    """Indices of messages that are yours. Pasted text is skipped here for the same reason the
+    signal layer skips it: an effect credited to someone else's words is credited to the wrong
+    person, and the rare-event catalogue is where that mistake would be loudest."""
+    return [i for i, e in enumerate(evs) if e["kind"] == "user" and not e.get("paste")]
+
+
+def _axis_constraint_survival(by_session, rx):
+    """Enhancer: you named a constraint early; did the session then run without a correction?
+
+    Denominator is sessions, not messages -- holding a constraint is a property of a stretch of
+    work, and nothing else here is measured per session."""
+    total = clean = 0
+    ev = []
+    for evs in by_session.values():
+        idx = _users(evs)
+        if len(idx) < 3:
+            continue
+        early = idx[:max(1, len(idx) // 3)]
+        if not any(rx["constraint"] and rx["constraint"].search(evs[i]["text"]) for i in early):
+            continue
+        total += 1
+        rest = idx[len(early):]
+        if not any(rx["correction"] and rx["correction"].search(evs[i]["text"]) for i in rest):
+            clean += 1
+        elif len(ev) < 3:
+            ev.append(quote(evs[early[0]], 160))
+    return _axis("sessions that held their constraint", "sessions", clean, total,
+                 "A constraint stated in the first third, and no correction afterwards.", ev)
+
+
+def _axis_started_without_asking(by_session, rx):
+    """Emitter: after your request, did the agent get to work, or ask you what you meant?
+
+    A clarifying question is the agent telling you the finished picture did not arrive."""
+    total = started = 0
+    ev = []
+    for evs in by_session.values():
+        idx = _users(evs)
+        for pos, i in enumerate(idx):
+            if not (rx["request"] and rx["request"].search(evs[i]["text"])):
+                continue
+            nxt = idx[pos + 1] if pos + 1 < len(idx) else len(evs)
+            span = evs[i + 1:nxt]
+            total += 1
+            if not any(e["kind"] == "assistant" and e["question"] for e in span):
+                started += 1
+            elif len(ev) < 3:
+                ev.append(quote(evs[i], 160))
+    return _axis("requests the agent could act on directly", "requests", started, total,
+                 "No clarifying question from the agent before it started.", ev)
+
+
+def _axis_vague_to_criterion(by_session, rx):
+    """Transmuter: a topic that began as a feeling -- did you turn it into something checkable?
+
+    Denominator is stretches that started vague, so it cannot be raised by never being vague."""
+    total = converted = 0
+    ev = []
+    for evs in by_session.values():
+        idx = _users(evs)
+        for pos, i in enumerate(idx):
+            if not (rx["vague"] and rx["vague"].search(evs[i]["text"])):
+                continue
+            total += 1
+            later = [evs[j]["text"] for j in idx[pos + 1:]]
+            if any(rx["concrete_criterion"] and rx["concrete_criterion"].search(t)
+                   for t in later):
+                converted += 1
+                if len(ev) < 3:
+                    ev.append(quote(evs[i], 160))
+    return _axis("fuzzy starts that became checkable", "vague openings", converted, total,
+                 "'Something is off' followed, in the same session, by a criterion someone "
+                 "else could apply.", ev)
+
+
+def _axis_finish_line_verified(by_session, rx):
+    """Conjurer: you wrote what done looks like -- did the agent then show it had checked?
+
+    This tests the prescription this whole tool argues for, against the tool's own corpus."""
+    total = verified = 0
+    ev = []
+    for evs in by_session.values():
+        idx = _users(evs)
+        for pos, i in enumerate(idx):
+            t = evs[i]["text"]
+            if not (rx["request"] and rx["request"].search(t)
+                    and rx["acceptance"] and rx["acceptance"].search(t)):
+                continue
+            nxt = idx[pos + 1] if pos + 1 < len(idx) else len(evs)
+            total += 1
+            if any(e["kind"] == "assistant" and e["verify"] for e in evs[i + 1:nxt]):
+                verified += 1
+                if len(ev) < 3:
+                    ev.append(quote(evs[i], 160))
+    return _axis("finish lines the agent actually checked against", "requests with a finish line",
+                 verified, total,
+                 "You said what done means, and the agent came back with evidence rather than "
+                 "a claim.", ev)
+
+
+def _axis_rules_that_stuck(by_session, rx):
+    """Manipulator: of the rules you declared, how many stopped depending on memory?
+
+    Written into a rule file, hook or config later in the same session. A rule that lives only
+    in the transcript has to be said again next time, which is the thing steering is supposed
+    to end."""
+    total = mechanised = 0
+    ev = []
+    for evs in by_session.values():
+        for i in _users(evs):
+            if not (rx["rulemaking"] and rx["rulemaking"].search(evs[i]["text"])):
+                continue
+            total += 1
+            if any(e["kind"] == "tool" and e["mechanism"] for e in evs[i + 1:]):
+                mechanised += 1
+                if len(ev) < 3:
+                    ev.append(quote(evs[i], 160))
+    return _axis("rules that became machinery", "rules declared", mechanised, total,
+                 "Followed, in the same session, by a write into a rule file, hook or config.",
+                 ev)
+
+
+# ---------------------------------------------------------------- rare events
+# 特質系 is the type you cannot train into. Measuring it as a rate would hand it to everyone, so
+# it is not a rate: it is a catalogue of conjunctive events that are hard to satisfy by accident.
+# Each one needs three or four separate things to line up in the right order. Finding one is the
+# point -- the report names it and shows the moment, because that is the interesting part of a
+# reading, not another percentage.
+#
+# Honest limit: "rare" here means rare **by construction**, not rare compared with other people.
+# There is no cross-operator baseline in this repo and inventing one would be a fabrication.
+
+RARE_EVENTS = [
+    ("mechanised_lesson", "A lesson that became machinery",
+     "A correction, then a rule, then that rule written into a file, hook or config -- all in "
+     "one session. The failure stopped depending on anyone remembering it."),
+    ("externalised_sense", "A feeling turned into a check",
+     "'Something is off', then a criterion someone else could apply, then the agent verifying "
+     "against it. The whole path from taste to test, in one stretch."),
+    ("confluence", "Separate sources woven into one thing",
+     "Material you pasted from elsewhere, your own instruction, and a write into a durable "
+     "artifact -- combined in a single session rather than handled one at a time."),
+    ("invited_refutation", "Asking to be proven wrong before starting",
+     "You asked for a counter-example or an objection to your own framing before the work "
+     "began, rather than after it failed."),
+]
+
+REFUTATION_RX = r"(反例|反証|否定側|逆に言うと.{0,10}おかしい|穴があれば|間違っていたら教えて|" \
+                r"counter-?example|argue against|prove me wrong|poke holes|what would break)"
+
+
+STEP_GAP = 6      # messages of yours the next step must land within, or the chain is not one act
+
+
+def _rare_events(by_session, rx):
+    """Return the rare events that actually fired, each with the moment it happened.
+
+    Two rules keep these rare instead of merely frequent. The steps must land **in order and
+    close together** -- a correction on Monday and a rule on Friday are two things that happened,
+    not one act -- and a session may contribute **at most one** of each, so a long session cannot
+    manufacture a streak. The first version of this ignored both and reported 41 "rare" events in
+    a month, which is a counter, not a find.
+    """
+    import re as _re
+    refute = _re.compile(REFUTATION_RX)
+    found = {key: {"key": key, "label": label, "definition": defn, "n": 0, "evidence": []}
+             for key, label, defn in RARE_EVENTS}
+
+    for evs in by_session.values():
+        idx = _users(evs)
+        pos_of = {i: p for p, i in enumerate(idx)}
+
+        def step(pred, after_pos=-1):
+            """First of your messages matching pred, within STEP_GAP messages of the last step."""
+            for p in range(after_pos + 1, len(idx)):
+                if after_pos >= 0 and p - after_pos > STEP_GAP:
+                    return None
+                if pred(evs[idx[p]]["text"]):
+                    return p
+            return None
+
+        def tool_after(p, pred):
+            start = idx[p]
+            stop = idx[p + STEP_GAP] if p + STEP_GAP < len(idx) else len(evs)
+            return any(pred(e) for e in evs[start + 1:stop])
+
+        c = step(lambda t: bool(rx["correction"] and rx["correction"].search(t)))
+        if c is not None:
+            r = step(lambda t: bool(rx["rulemaking"] and rx["rulemaking"].search(t)), c)
+            if r is not None and tool_after(r, lambda e: e["kind"] == "tool" and e["mechanism"]):
+                _hit(found["mechanised_lesson"], evs[idx[r]])
+
+        v = step(lambda t: bool(rx["vague"] and rx["vague"].search(t)))
+        if v is not None:
+            k = step(lambda t: bool(rx["concrete_criterion"]
+                                    and rx["concrete_criterion"].search(t)), v)
+            if k is not None and tool_after(k, lambda e: e["kind"] == "assistant" and e["verify"]):
+                _hit(found["externalised_sense"], evs[idx[v]])
+
+        # confluence needs material you brought in from elsewhere AND your own instruction close
+        # to it AND something durable written -- all three inside one stretch, not one session
+        for p, i in enumerate(idx):
+            if not (rx["request"] and rx["request"].search(evs[i]["text"])):
+                continue
+            near = evs[max(0, i - 3):i]
+            brought_in = any(e["kind"] == "user" and e.get("paste") for e in near)
+            if brought_in and tool_after(p, lambda e: e["kind"] == "tool" and e["mechanism"]):
+                _hit(found["confluence"], evs[i])
+                break
+
+        rf = step(lambda t: bool(refute.search(t)))
+        if rf is not None:
+            _hit(found["invited_refutation"], evs[idx[rf]])
+
+    return [f for f in found.values() if f["n"]]
+
+
+def _hit(entry, event):
+    entry["n"] += 1
+    if len(entry["evidence"]) < 3:
+        entry["evidence"].append(quote(event, 200))
+
+
+def _misread_halves(events):
+    """Direction of travel. Split by position, not by date: a corpus is rarely evenly spread."""
+    agent = [e for e in events if e["kind"] == "assistant"]
+    if len(agent) < 20:
+        return (None, None)
+    mid = len(agent) // 2
+    out = []
+    for part in (agent[:mid], agent[mid:]):
+        hits = sum(1 for e in part if e["misread"])
+        out.append({"n": hits, "per_100": round(100.0 * hits / len(part), 2)})
+    return tuple(out)
+
+
 # ---------------------------------------------------------------- the interview
 
 def open_questions(result, pattern_sets, cfg):
@@ -291,6 +615,49 @@ def open_questions(result, pattern_sets, cfg):
                     "answer_format": "had-occasion | no-occasion",
                     "blocking": False,
                 })
+
+    for tid, ax in (result.get("effects", {}).get("axes") or {}).items():
+        t = next((x for x in result["types"] if x["id"] == tid), None)
+        label = (t or {}).get("label_en") or tid
+        if not ax["enough"]:
+            qs.append({
+                "id": "occ_axis_%s" % tid,
+                "kind": "occasion",
+                "type": tid,
+                "why": "The %s axis had only %d observation(s), too few to rate."
+                       % (label, ax["n"]),
+                "ask": "Did this period simply not call for %s, or did you not reach for it?"
+                       % ax["label"],
+                "observe": "",
+                "answer_format": "no occasion | did not reach for it",
+                "blocking": False,
+            })
+            continue
+        qs.append({
+            "id": "attr_%s" % tid,
+            "kind": "attribution",
+            "type": tid,
+            "why": "%s: %d of %d %s (%s%%). %s"
+                   % (label, ax["hits"], ax["n"], ax["unit"], ax["pct"], ax["detail"]),
+            "ask": "Were those %s the same kind of work as the rest — or the ones you already "
+                   "understood well?" % ax["unit"],
+            "observe": "A number that only holds on easy work is not an aptitude.",
+            "answer_format": "same kind | the easier ones | the harder ones",
+            "blocking": True,
+        })
+
+    for r in (result.get("effects", {}).get("rare") or []):
+        qs.append({
+            "id": "rare_%s" % r["key"],
+            "kind": "rare",
+            "type": "tokushitsu",
+            "why": "%s — fired %d time(s). %s" % (r["label"], r["n"], r["definition"]),
+            "ask": "Was this deliberate, or did it happen to fall out that way?",
+            "observe": "Specialist is recognised on the deliberate ones. Confirm it with the "
+                       "moment shown, not with the count.",
+            "answer_format": "deliberate | accident | not what happened",
+            "blocking": True,
+        })
 
     if result["authorship"]["paste_suspect"]["n"]:
         qs.append({
@@ -405,6 +772,85 @@ def _self_test():
           provisional_ranking(r)[0]["hits"] >= provisional_ranking(r)[-1]["hits"])
 
     check("empty corpus measures to nothing, not to zeros", measure([], pats, cfg) is None)
+
+    # -- the effect layer: six axes that have to be able to disagree with each other -------
+    def ev(kind, text="", **kw):
+        e = {"ts": "2026-08-01T10:00", "session": kw.pop("s", "e1"), "kind": kind,
+             "text": text, "tool": "", "mechanism": False,
+             "misread": False, "question": False, "verify": False, "paste": None}
+        e.update(kw)
+        return e
+
+    tl = []
+    # a session that names a constraint early and never gets corrected
+    tl += [ev("user", "you must not drop the constraint", s="s1"), ev("assistant", s="s1"),
+           ev("user", "please continue", s="s1"), ev("user", "please finish it", s="s1")]
+    # a session that names one and does get corrected
+    tl += [ev("user", "this is a requirement, always", s="s2"), ev("assistant", s="s2"),
+           ev("user", "keep going", s="s2"), ev("user", "no, that's wrong", s="s2")]
+    # a request the agent acted on, and one it asked about
+    tl += [ev("user", "please build the loader", s="s3"), ev("assistant", s="s3"),
+           ev("user", "please build the parser", s="s3"),
+           ev("assistant", question=True, s="s3")]
+    # a finish line the agent verified, and one it did not
+    tl += [ev("user", "please fix it, done when tests pass", s="s4"),
+           ev("assistant", verify=True, s="s4"),
+           ev("user", "please ship it, done when tests pass", s="s4"),
+           ev("assistant", s="s4")]
+    # a declared rule that reached a rule file, and one that did not
+    tl += [ev("user", "from now on print the diff", s="s5"),
+           ev("tool", tool="Edit", mechanism=True, s="s5"),
+           ev("user", "from now on ask first", s="s6"), ev("assistant", s="s6")]
+    eff = measure_effects(tl, pats, cfg)
+    ax = eff["axes"]
+    check("Enhancer axis counts sessions, not messages",
+          ax["kyouka"]["n"] == 2 and ax["kyouka"]["hits"] == 1, str(ax["kyouka"]))
+    # every "please ..." in the fixture is a request, across all four sessions; exactly one of
+    # them is followed by the agent asking what was meant
+    check("Emitter axis counts requests the agent did not have to ask about",
+          ax["houshutsu"]["n"] == 6 and ax["houshutsu"]["hits"] == 5, str(ax["houshutsu"]))
+    check("Conjurer axis counts only requests that carried a finish line",
+          ax["gugenka"]["n"] == 2 and ax["gugenka"]["hits"] == 1, str(ax["gugenka"]))
+    check("Manipulator axis counts rules that reached a file",
+          ax["sousa"]["n"] == 2 and ax["sousa"]["hits"] == 1, str(ax["sousa"]))
+    check("an axis below the minimum reports its count instead of a rate",
+          ax["henka"]["enough"] is False and ax["henka"]["pct"] is None, str(ax["henka"]))
+    check("the axes disagree with each other, which one shared outcome could not",
+          len({ax[k]["hits"] for k in ("kyouka", "houshutsu", "gugenka", "sousa")}) > 1)
+
+    pasted_rule = [ev("user", "from now on print the diff", s="p1", paste="structured"),
+                   ev("tool", tool="Edit", mechanism=True, s="p1")]
+    check("a rule you pasted from somewhere else is not your steering",
+          measure_effects(pasted_rule, pats, cfg)["axes"]["sousa"]["n"] == 0)
+
+    # -- rare events: order and proximity are the whole definition ------------------------
+    chain = [ev("user", "no, that's wrong", s="r1"),
+             ev("user", "from now on print the diff", s="r1"),
+             ev("tool", tool="Edit", mechanism=True, s="r1")]
+    got = {r["key"]: r for r in measure_effects(chain, pats, cfg)["rare"]}
+    check("a correction, then a rule, then a rule file = one rare find",
+          got.get("mechanised_lesson", {}).get("n") == 1, str(list(got)))
+    check("the rare find carries the moment, not just a count",
+          bool(got["mechanised_lesson"]["evidence"][0]["text"]))
+
+    far = ([ev("user", "no, that's wrong", s="r2")]
+           + [ev("user", "please carry on", s="r2") for _ in range(STEP_GAP + 2)]
+           + [ev("user", "from now on print the diff", s="r2"),
+              ev("tool", tool="Edit", mechanism=True, s="r2")])
+    check("the same steps far apart are two events, not one act",
+          not any(r["key"] == "mechanised_lesson"
+                  for r in measure_effects(far, pats, cfg)["rare"]))
+
+    reversed_order = [ev("user", "from now on print the diff", s="r3"),
+                      ev("tool", tool="Edit", mechanism=True, s="r3"),
+                      ev("user", "no, that's wrong", s="r3")]
+    check("the steps out of order do not count",
+          not any(r["key"] == "mechanised_lesson"
+                  for r in measure_effects(reversed_order, pats, cfg)["rare"]))
+
+    long_session = chain * 4
+    check("one session contributes at most one of each rare event",
+          measure_effects(long_session, pats, cfg)["rare"][0]["n"] == 1)
 
     print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1

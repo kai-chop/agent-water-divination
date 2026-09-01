@@ -58,6 +58,9 @@ DEFAULT_SOURCES = [
 DEFAULT_SKIP_PREFIXES = [
     "<command-name>", "<local-command", "<environment_context", "<user_instructions",
     "Caveat:", "This session is being continued", "[Request interrupted",
+    # hook output is delivered in the user slot and reads exactly like something you typed
+    "Stop hook feedback", "PreToolUse:", "PostToolUse:", "SessionStart",
+    "<system-reminder>", "Tool ran without output",
 ]
 
 DEFAULTS = {
@@ -304,6 +307,128 @@ def collect(cfg, since=None, until=None, attribution_rx=None):
     return out, report
 
 
+# ---------------------------------------------------------------- timeline
+# The signal layer asks what you wrote. The effect layer asks what happened next, which means
+# reading the turns the signal layer deliberately throws away: the agent's replies and its tool
+# calls. Kept deliberately thin -- an agent's prose is the bulk of a transcript and none of it is
+# needed verbatim here, only whether it admits a misread, so it is reduced to a flag on the way in.
+
+TIMELINE_FORMATS = ("claude-code", "codex")
+
+
+def _mechanism_hit(path, mechanism_rx):
+    return bool(path and mechanism_rx and mechanism_rx.search(path))
+
+
+def _tool_events(blocks, ts, session, mechanism_rx, name_key="name"):
+    for b in blocks if isinstance(blocks, list) else []:
+        if not isinstance(b, dict) or b.get("type") not in ("tool_use", "custom_tool_call"):
+            continue
+        inp = b.get("input")
+        if isinstance(inp, str):
+            path = inp
+        elif isinstance(inp, dict):
+            path = str(inp.get("file_path") or inp.get("path") or "")
+        else:
+            path = ""
+        yield _event(ts, session, "tool", tool=b.get(name_key) or "?",
+                     mechanism=_mechanism_hit(path, mechanism_rx))
+
+
+def _agent_flags(text, flags):
+    """The agent's prose is the bulk of a transcript and none of it is needed verbatim -- only
+    whether it admits a misread, asks the operator a question, or shows that it verified."""
+    return {name: bool(rx and text and rx.search(text)) for name, rx in flags.items()}
+
+
+AGENT_FLAGS = ("misread", "question", "verify")
+
+
+def _event(ts, session, kind, text="", tool="", mechanism=False, flags=None):
+    e = {"ts": ts, "session": session, "kind": kind, "text": text,
+         "tool": tool, "mechanism": mechanism}
+    e.update({name: False for name in AGENT_FLAGS})
+    if flags:
+        e.update(flags)
+    return e
+
+
+def timeline_claude_code(root, flag_rx, mechanism_rx, skip):
+    for path in sorted(glob.glob(os.path.join(root, "*", "*.jsonl"))):
+        for d in _read_jsonl(path):
+            if d.get("isSidechain"):
+                continue
+            ts = d.get("timestamp", "")
+            session = d.get("sessionId", os.path.basename(path))
+            content = (d.get("message") or {}).get("content")
+            text = _text_blocks(content)
+            if d.get("type") == "user":
+                if (d.get("promptSource") in (None, "typed")
+                        and (d.get("origin") or {}).get("kind") in (None, "human")
+                        and text and not text.startswith(skip)):
+                    yield _event(ts, session, "user", text=text)
+            elif d.get("type") == "assistant":
+                yield _event(ts, session, "assistant", flags=_agent_flags(text, flag_rx))
+                for e in _tool_events(content, ts, session, mechanism_rx):
+                    yield e
+
+
+def timeline_codex(root, flag_rx, mechanism_rx, skip):
+    for path in sorted(glob.glob(os.path.join(root, "**", "*.jsonl"), recursive=True)):
+        session = os.path.basename(path)
+        for d in _read_jsonl(path):
+            p = d.get("payload")
+            if not isinstance(p, dict):
+                continue
+            ts = d.get("timestamp", "")
+            if p.get("type") == "message":
+                text = _text_blocks(p.get("content"))
+                if p.get("role") == "user":
+                    if text and not text.startswith(skip):
+                        yield _event(ts, session, "user", text=text)
+                elif p.get("role") == "assistant":
+                    yield _event(ts, session, "assistant", flags=_agent_flags(text, flag_rx))
+            elif p.get("type") == "custom_tool_call":
+                for e in _tool_events([p], ts, session, mechanism_rx):
+                    yield e
+
+
+TIMELINE_READERS = {"claude-code": timeline_claude_code, "codex": timeline_codex}
+
+
+def collect_timeline(cfg, since=None, until=None, flag_rx=None, mechanism_rx=None,
+                     attribution_rx=None):
+    """Return (events, sources_without_an_agent_side).
+
+    The second value matters: a plain-text or generic-JSONL corpus holds only your half of the
+    conversation, so no effect can be measured from it. Saying so is the difference between
+    "the agent never changed" and "this corpus cannot see the agent at all".
+    """
+    skip = tuple(cfg["skip_prefixes"])
+    events, blind = [], []
+    for src in cfg["sources"]:
+        fmt = src.get("format")
+        if not fmt:
+            continue
+        root = resolve(src.get("root", ""))
+        if not os.path.isdir(root):
+            continue
+        reader = TIMELINE_READERS.get(fmt)
+        if reader is None:
+            blind.append(fmt)
+            continue
+        for e in reader(root, flag_rx or {}, mechanism_rx, skip):
+            if not in_window(e["ts"], since, until):
+                continue
+            # the same authorship split the signal layer uses: text you pasted is not your
+            # behaviour, and an effect credited to it would be credited to the wrong person
+            if e["kind"] == "user":
+                e["paste"] = classify_paste(e["text"], cfg, attribution_rx)
+            events.append(e)
+    events.sort(key=lambda e: (e["session"], e["ts"]))
+    return events, sorted(set(blind))
+
+
 def format_scan_report(report):
     lines = []
     for e in report:
@@ -433,6 +558,60 @@ def _self_test():
         check("window filter applies across every reader",
               [m["text"] for m in windowed] == ["generic mine"],
               str([m["text"] for m in windowed]))
+
+        # -- the timeline: the agent's side, which the signal layer throws away ---------
+        tl_dir = os.path.join(tmp, "tl", "proj")
+        os.makedirs(tl_dir)
+        pasted = "## Review\n**Not ready.**\n" + "body text. " * 40
+        tl_rows = [
+            {"type": "user", "promptSource": "typed", "origin": {"kind": "human"},
+             "timestamp": "2026-08-05T10:00:00Z", "sessionId": "t1",
+             "message": {"content": [{"type": "text", "text": "fix the parser"}]}},
+            {"type": "assistant", "timestamp": "2026-08-05T10:01:00Z", "sessionId": "t1",
+             "message": {"content": [
+                 {"type": "text", "text": "Should I start with the lexer? just to check"},
+                 {"type": "tool_use", "name": "Edit",
+                  "input": {"file_path": "/repo/rules/style.md"}}]}},
+            {"type": "assistant", "timestamp": "2026-08-05T10:02:00Z", "sessionId": "t1",
+             "message": {"content": [
+                 {"type": "text", "text": "I misread that. Now tests pass, exit 0"},
+                 {"type": "tool_use", "name": "Bash", "input": {"command": "pytest"}}]}},
+            {"type": "user", "promptSource": "typed", "origin": {"kind": "human"},
+             "timestamp": "2026-08-05T10:03:00Z", "sessionId": "t1",
+             "message": {"content": [{"type": "text", "text": pasted}]}},
+        ]
+        with io.open(os.path.join(tl_dir, "t.jsonl"), "w", encoding="utf-8") as f:
+            for r in tl_rows:
+                f.write(json.dumps(r, ensure_ascii=False) + "\n")
+
+        cfg3 = load_config()
+        cfg3["sources"] = [{"format": "claude-code", "root": os.path.join(tmp, "tl")}]
+        flags = {"misread": re.compile(r"misread"),
+                 "question": re.compile(r"[Ss]hould I|just to check"),
+                 "verify": re.compile(r"exit 0|tests pass")}
+        evs, blind = collect_timeline(cfg3, flag_rx=flags,
+                                      mechanism_rx=re.compile(r"rules?[/\\]"),
+                                      attribution_rx=attrib)
+        kinds = [e["kind"] for e in evs]
+        check("the timeline carries your turns, the agent's, and its tool calls",
+              kinds.count("user") == 2 and kinds.count("assistant") == 2
+              and kinds.count("tool") == 2, str(kinds))
+        check("an agent turn asking you a question is flagged",
+              any(e["kind"] == "assistant" and e["question"] for e in evs))
+        check("an agent turn admitting a misread is flagged",
+              any(e["kind"] == "assistant" and e["misread"] for e in evs))
+        check("an agent turn showing verification is flagged",
+              any(e["kind"] == "assistant" and e["verify"] for e in evs))
+        check("a write into a rules file is flagged as mechanism, a test run is not",
+              [e["mechanism"] for e in evs if e["kind"] == "tool"] == [True, False],
+              str([(e["tool"], e["mechanism"]) for e in evs if e["kind"] == "tool"]))
+        check("pasted text is marked in the timeline too, not just in the signal layer",
+              [bool(e.get("paste")) for e in evs if e["kind"] == "user"] == [False, True])
+
+        cfg3["sources"] = [{"format": "jsonl", "root": gen}]
+        _, blind = collect_timeline(cfg3, flag_rx=flags)
+        check("a corpus with no agent side says so instead of reporting zero effect",
+              blind == ["jsonl"], str(blind))
 
     print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1

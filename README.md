@@ -21,19 +21,23 @@ it could **not** settle, as questions to answer out loud.
 
 ## Where the six come from
 
-The Water Divination is the aptitude test from Yoshihiro Togashi's *HUNTER × HUNTER*: you put your
-hands on a glass with a leaf in it, and which of six ways the water changes tells you your type.
-The six are borrowed straight from there and re-read as aptitudes of the person directing an AI —
-the glass is a month of your own messages, and the reactions keep their original meanings.
+The Water Divination is the aptitude test from Yoshihiro Togashi's *HUNTER × HUNTER*: you fill a
+glass with water, float a leaf on it, and wrap the glass in your aura. Which of six ways the glass
+reacts tells you your type. The six are borrowed straight from there and re-read as aptitudes of
+the person directing an AI — the glass is a month of your own messages, and the reactions keep
+their original meanings.
 
-| Type | The water | Re-read as |
+| Type | The glass | Re-read as |
 |---|---|---|
-| 強化系 Enhancer | rises | Holding the goal and its constraints all the way through |
-| 放出系 Emitter | changes colour | Getting the finished picture out of your head and into the agent |
-| 変化系 Transmuter | changes taste | Turning a feeling, or another field's structure, into this one's |
-| 具現化系 Conjurer | shows sediment | Turning a vague ideal into a spec and a finish line |
-| 操作系 Manipulator | moves the leaf | Steering the agent's rules, not just fixing its output |
-| 特質系 Specialist | something else | A combination the other five cannot account for |
+| 強化系 Enhancer | the water rises | Holding the goal and its constraints all the way through |
+| 放出系 Emitter | the water changes colour | Getting the finished picture out of your head and into the agent |
+| 変化系 Transmuter | the water changes taste | Turning a feeling, or another field's structure, into this one's |
+| 具現化系 Conjurer | sediment appears | Turning a vague ideal into a spec and a finish line |
+| 操作系 Manipulator | the leaf moves | Steering the agent's rules, not just fixing its output |
+| 特質系 Specialist | the leaf withers | Something the other five cannot account for |
+
+Note the odd one out: five of the reactions happen to the water, and the sixth happens to the
+leaf. That asymmetry is why Specialist is measured differently here — see below.
 
 ![The six vessels, each showing the reaction its type is named for](assets/six-vessels.svg)
 
@@ -59,6 +63,47 @@ NO VERDICT. The reading stays provisional because:
 
 Answering *"no, I pasted that"* revokes the quote. If that drops a type below the two quotes a
 verdict requires, the verdict goes with it. The interview is a gate, not a formality.
+
+## Six aptitudes need six separate quantities
+
+Counting your vocabulary tells you that you *exercised* an aptitude, never that it *worked*. So
+each type carries a second number: what happened next, on the agent's side. Each one has its own
+outcome, its own denominator and its own unit, so they can move independently.
+
+| Type | Its own axis | Denominator |
+|---|---|---|
+| Enhancer | sessions that held their constraint to the end without a correction | sessions |
+| Emitter | requests the agent could act on, instead of asking what you meant | requests |
+| Transmuter | fuzzy starts that turned into something checkable | vague openings |
+| Conjurer | finish lines the agent actually came back with evidence against | requests with a finish line |
+| Manipulator | rules that reached a rule file, hook or config | rules declared |
+| Specialist | not a rate — see below | — |
+
+The first version of this layer did it the obvious way: one outcome for everybody, and split the
+population by which vocabulary a request carried. Every type then landed within a few points of
+every other, all pointing the same direction, because that design measures one thing five times —
+longer requests carry more of every vocabulary and are harder. Adjusting for length would have
+hidden a structural fault behind a statistic. **If your six axes cannot disagree with each other,
+you do not have six axes.**
+
+## Specialist is a find, not a score
+
+Five reactions happen to the water; the sixth happens to the leaf. Specialist is measured
+differently for the same reason: as a **catalogue of rare events**, each needing three or four
+things to line up in order and close together.
+
+- **A lesson that became machinery** — a correction, then a rule, then that rule written into a
+  file, hook or config, all in one stretch. The failure stopped depending on anyone remembering it.
+- **A feeling turned into a check** — "something's off", then a criterion someone else could
+  apply, then the agent verifying against it.
+- **Separate sources woven into one thing** — material brought in from elsewhere, your own
+  instruction beside it, and something durable written out of the combination.
+- **Asking to be proven wrong before starting** — you invited the counter-example while it was
+  still cheap.
+
+Most windows turn up none, and that is the expected result. Rare here means **rare by
+construction** — the definitions are hard to satisfy — not rare compared with other people. There
+is no cross-operator baseline in this repo, and inventing one would be a fabrication.
 
 ## What it found in the corpus it was built on
 
