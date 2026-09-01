@@ -1,0 +1,408 @@
+# -*- coding: utf-8 -*-
+"""nen_report — render a divination result as one self-contained HTML page.
+
+No network, no CDN, no build step: system fonts and inline SVG only, so the file still reads
+correctly on a machine that is offline or behind a proxy. Everything from the transcript is
+HTML-escaped -- the input is arbitrary text the operator typed, including angle brackets.
+
+The page renders both states of a divination and never confuses them:
+
+  provisional  measured, not yet confirmed. The open questions are printed as the page's
+               main content, because at that stage they *are* the finding.
+  confirmed    the interview happened; the verdict, the answers that unlocked it, and the
+               quotes it rests on are shown together.
+
+Self-test: python tools/nen_report.py --self-test
+"""
+import argparse
+import html
+import io
+import json
+import os
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+
+REPORT_VERSION = "1"
+
+# Which reaction the water shows, per the original test. Unknown ids get a still glass.
+GLASS = {
+    "kyouka": '<path class="w" d="M13 18 L47 18 L42 74 L18 74 Z"/>',
+    "houshutsu": '<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z" opacity=".55"/>',
+    "henka": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
+              '<path class="sh" d="M17 40 q4 -4 8 0 t8 0 t8 0"/>'
+              '<path class="sh" d="M18 52 q4 -4 8 0 t8 0 t7 0"/>'),
+    "gugenka": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
+                '<circle class="sp" cx="26" cy="45" r="1.4"/>'
+                '<circle class="sp" cx="34" cy="58" r="1.1"/>'),
+    "sousa": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
+              '<g class="spin"><ellipse class="lf" cx="30" cy="30" rx="8" ry="3.2"/></g>'),
+    "tokushitsu": ('<path class="w" d="M14 30 L46 30 L42 74 L18 74 Z"/>'
+                   '<circle class="sp" cx="25" cy="52" r="2.2" opacity=".8"/>'
+                   '<circle class="sp" cx="33" cy="42" r="1.5" opacity=".6"/>'
+                   '<circle class="sp" cx="36" cy="61" r="1.1" opacity=".9"/>'),
+}
+GLASS_BODY = '<path class="g" d="M12 8 L18 74 L42 74 L48 8"/>'
+
+CSS = """
+:root{--ground:#e6ebeb;--surface:#f4f7f6;--surface2:#dde5e5;--line:#c2cfcf;--text:#16211f;
+--soft:#4d5f5c;--faint:#7b8a87;--water:#14707c;--fill:#7fc3c9;--leaf:#5f8a33;--rust:#a44a34;
+--sand:#a4967a;--glass:#6f8a8a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ground:#0b1315;
+--surface:#101b1d;--surface2:#16262a;--line:#26383c;--text:#e3ecea;--soft:#9db0ad;--faint:#6e8380;
+--water:#4fc2cc;--fill:#1d5a63;--leaf:#9ac25f;--rust:#d9765c;--sand:#b7a888;--glass:#4b6469}}
+:root[data-theme="dark"]{--ground:#0b1315;--surface:#101b1d;--surface2:#16262a;--line:#26383c;
+--text:#e3ecea;--soft:#9db0ad;--faint:#6e8380;--water:#4fc2cc;--fill:#1d5a63;--leaf:#9ac25f;
+--rust:#d9765c;--sand:#b7a888;--glass:#4b6469}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--text);line-height:1.8;
+font-family:system-ui,"Hiragino Sans","Yu Gothic UI",Meiryo,sans-serif;font-size:16px}
+.wrap{max-width:47rem;margin:0 auto;padding:3.5rem 1.4rem 5rem;display:flex;flex-direction:column;
+gap:3.5rem}
+h1,h2,h3{margin:0;text-wrap:balance;font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif}
+h1{font-size:clamp(2rem,6vw,2.9rem);line-height:1.25}
+h1 .sub{display:block;font-size:.36em;color:var(--water);margin-top:.6rem;letter-spacing:.08em;
+font-family:system-ui,sans-serif}
+h2{font-size:1.35rem;margin-bottom:.3rem}
+.eyebrow{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.7rem;
+letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
+.note{color:var(--soft);font-size:.9rem;margin:0 0 1.5rem}
+.lede{color:var(--soft);max-width:34rem;margin:0}
+.state{display:inline-block;font-family:ui-monospace,monospace;font-size:.66rem;letter-spacing:.14em;
+padding:.15rem .55rem;border:1px solid var(--line);color:var(--soft)}
+.state.confirmed{border-color:var(--water);color:var(--water)}
+.state.provisional{border-color:var(--sand);color:var(--sand)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));gap:1px;
+background:var(--line);border:1px solid var(--line);margin:0}
+.fact{background:var(--surface);padding:.8rem 1rem}
+.fact dt{font-family:ui-monospace,monospace;font-size:.64rem;letter-spacing:.1em;color:var(--faint);
+text-transform:uppercase}
+.fact dd{margin:.1rem 0 0;font-family:ui-monospace,monospace;font-size:1.1rem;
+font-variant-numeric:tabular-nums}
+.fact dd small{font-family:inherit;font-size:.7rem;color:var(--faint);margin-left:.3rem}
+.glasses{display:grid;grid-template-columns:repeat(6,1fr);gap:.5rem;padding:1.6rem 1rem 1.1rem;
+background:var(--surface);border:1px solid var(--line);overflow-x:auto}
+@media(max-width:40rem){.glasses{grid-template-columns:repeat(3,1fr);row-gap:1.4rem}}
+.vessel{display:flex;flex-direction:column;align-items:center;gap:.45rem;text-align:center}
+.vessel svg{width:100%;max-width:4.3rem;height:auto}
+.vessel .nm{font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;font-size:.9rem;
+font-weight:700}
+.vessel .rx{font-size:.66rem;color:var(--faint);line-height:1.5}
+.vessel.main .nm{color:var(--water)}
+.vessel.main::after{content:attr(data-tag);font-family:ui-monospace,monospace;font-size:.56rem;
+letter-spacing:.08em;color:var(--ground);background:var(--water);padding:.1rem .38rem}
+.g{fill:none;stroke:var(--glass);stroke-width:1.6;stroke-linejoin:round}
+.w{fill:var(--fill)}.lf{fill:var(--leaf)}.sp{fill:var(--sand)}
+.sh{fill:none;stroke:var(--surface);stroke-width:1.2}
+.spin{transform-origin:30px 34px;animation:spin 9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.spin{animation:none}}
+.cards{display:flex;flex-direction:column;gap:1.15rem}
+.card{background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--line);
+padding:1.4rem 1.5rem;display:flex;flex-direction:column;gap:.9rem}
+.card.main{border-left-color:var(--water)}
+.card.thin{border-left-color:var(--rust)}
+.card.unresolved{border-left-color:var(--sand)}
+.card-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem .9rem}
+.card-head h3{font-size:1.25rem}
+.card-head .en{font-size:.78rem;color:var(--faint);font-family:ui-monospace,monospace}
+.def{margin:-.5rem 0 0;font-size:.85rem;color:var(--faint)}
+.bars{display:flex;flex-direction:column;gap:.35rem}
+.bar{display:grid;grid-template-columns:9rem 1fr 5rem;align-items:center;gap:.7rem;font-size:.77rem}
+@media(max-width:34rem){.bar{grid-template-columns:6.5rem 1fr 4.2rem}}
+.bar .k{font-family:ui-monospace,monospace;font-size:.69rem;color:var(--soft);overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.bar .t{height:.48rem;background:var(--surface2);position:relative}
+.bar .f{position:absolute;inset:0 auto 0 0;background:var(--water)}
+.bar .f.zero{width:2px;background:var(--rust)}
+.bar .v{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;text-align:right;
+font-size:.73rem}
+blockquote{margin:0;padding:.85rem 1rem;background:var(--surface2);border-left:2px solid var(--leaf);
+font-size:.92rem;line-height:1.75}
+blockquote cite{display:block;margin-top:.45rem;font-style:normal;font-family:ui-monospace,monospace;
+font-size:.65rem;color:var(--faint)}
+.read{margin:0;font-size:.89rem;color:var(--soft)}
+table{border-collapse:collapse;width:100%;background:var(--surface);font-size:.85rem}
+.scroll{overflow-x:auto;border:1px solid var(--line)}
+th,td{padding:.65rem .85rem;text-align:left;border-bottom:1px solid var(--line)}
+th{font-family:ui-monospace,monospace;font-size:.63rem;letter-spacing:.1em;text-transform:uppercase;
+color:var(--faint);font-weight:400}
+td.num{font-family:ui-monospace,monospace;font-variant-numeric:tabular-nums;white-space:nowrap}
+tr:last-child td{border-bottom:none}
+.qs{display:flex;flex-direction:column;gap:1px;background:var(--line);border:1px solid var(--line)}
+.q{background:var(--surface);padding:1rem 1.2rem;display:flex;flex-direction:column;gap:.3rem}
+.q .tag{font-family:ui-monospace,monospace;font-size:.62rem;letter-spacing:.1em;color:var(--faint)}
+.q.block .tag{color:var(--rust)}
+.q .ask{font-size:.95rem}
+.q .why,.q .ans{font-size:.83rem;color:var(--soft);margin:0}
+.q .ans{border-left:2px solid var(--water);padding-left:.7rem}
+footer{border-top:1px solid var(--line);padding-top:1.3rem;font-size:.76rem;color:var(--faint);
+display:flex;flex-direction:column;gap:.35rem}
+code{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.95em;color:var(--soft)}
+"""
+
+E = html.escape
+
+
+def _bar(name, s, scale):
+    if s.get("pct") is None:
+        return ""
+    width = 0 if not s["n"] else max(2.0, min(100.0, 100.0 * s["pct"] / scale))
+    cls = "f zero" if s["n"] == 0 else "f"
+    style = "" if s["n"] == 0 else ' style="width:%.0f%%"' % width
+    return ('<div class="bar"><span class="k">%s</span><span class="t">'
+            '<span class="%s"%s></span></span><span class="v">%s%% (%d)</span></div>'
+            % (E(name), cls, style, s["pct"], s["n"]))
+
+
+def render(data):
+    """data = measurement + optional `verdict` block. Returns one complete HTML document."""
+    verdict = data.get("verdict") or {}
+    confirmed = bool(verdict.get("confirmed"))
+    roles = verdict.get("roles") or {}
+    reads = verdict.get("reads") or {}
+    main_id = verdict.get("main")
+    title = verdict.get("title") or "Water Divination"
+
+    w = data.get("window", {})
+    auth = data["authorship"]
+    scale = max([s["pct"] or 0 for t in data["types"] for s in (t["signals"] or {}).values()]
+                + [1.0])
+
+    out = ['<!doctype html><html lang="en"><head><meta charset="utf-8">',
+           '<meta name="viewport" content="width=device-width,initial-scale=1">',
+           "<title>%s</title><style>%s</style></head><body><div class='wrap'>" % (E(title), CSS)]
+
+    out.append("<header style='display:flex;flex-direction:column;gap:1.1rem'>")
+    out.append("<p class='eyebrow'>Water Divination &nbsp;/&nbsp; %s &rarr; %s</p>"
+               % (E(w.get("from", "?")), E(w.get("to", "?"))))
+    out.append("<h1>%s<span class='sub'>%s</span></h1>"
+               % (E(title), E(verdict.get("subtitle")
+                              or "Measuring the person directing the AI, not the AI")))
+    out.append("<p><span class='state %s'>%s</span></p>"
+               % ("confirmed" if confirmed else "provisional",
+                  "CONFIRMED" if confirmed else "PROVISIONAL — interview not complete"))
+    if verdict.get("summary"):
+        out.append("<p class='lede'>%s</p>" % E(verdict["summary"]))
+    out.append("<dl class='facts'>")
+    for label, value, sub in (
+            ("your messages", data["own"], "of %d read" % data["scanned"]),
+            ("sessions", data["sessions"], ""),
+            ("pastes excluded", auth["paste_suspect"]["n"],
+             "%s%%" % auth["paste_suspect"]["pct"]),
+            ("median length", data["length"]["median"], "chars")):
+        out.append("<div class='fact'><dt>%s</dt><dd>%s<small>%s</small></dd></div>"
+                   % (E(label), E(str(value)), E(sub)))
+    out.append("</dl></header>")
+
+    # -- the six vessels ------------------------------------------------------
+    out.append("<section><h2>The six vessels</h2><p class='note'>In the original test, which of "
+               "six ways the water changes tells you the type. Each glass here shows the reaction "
+               "its type is named for.</p><div class='glasses'>")
+    for t in data["types"]:
+        is_main = confirmed and t["id"] == main_id
+        out.append("<div class='vessel%s'%s>" % (" main" if is_main else "",
+                                                 " data-tag='MAIN'" if is_main else ""))
+        out.append("<svg viewBox='0 0 60 80' role='img' aria-label='%s: %s'>%s%s</svg>"
+                   % (E(t["label_en"]), E(t["reaction"]),
+                      GLASS.get(t["id"], ""), GLASS_BODY))
+        out.append("<span class='nm'>%s</span><span class='rx'>%s</span></div>"
+                   % (E(t["label"]), E(t["reaction"])))
+    out.append("</div></section>")
+
+    # -- per type -------------------------------------------------------------
+    out.append("<section><h2>Type by type</h2><p class='note'>Percentages are over your own "
+               "messages only. Every quote is a candidate until it has been read in its original "
+               "context.</p><div class='cards'>")
+    for t in data["types"]:
+        role = roles.get(t["id"], "")
+        cls = ("main" if role == "main" else "thin" if role == "thin"
+               else "unresolved" if not confirmed else "")
+        out.append("<article class='card %s'><div class='card-head'><h3>%s</h3>"
+                   "<span class='en'>%s</span>%s</div>"
+                   % (cls, E(t["label"]), E(t["label_en"]),
+                      "<span class='state'>%s</span>" % E(role) if role else ""))
+        out.append("<p class='def'>%s</p>" % E(t["gloss"]))
+        if t["signals"] is None:
+            out.append("<p class='read'><b>No detector, by design.</b> %s</p>" % E(t["reason"]))
+        else:
+            out.append("<div class='bars'>")
+            for name, s in t["signals"].items():
+                out.append(_bar(name, s, scale))
+            out.append("</div>")
+            shown = set()
+            for name, quotes in (t["quotes"] or {}).items():
+                for q in quotes:
+                    key = q["text"][:40]
+                    if key in shown:
+                        continue
+                    shown.add(key)
+                    out.append("<blockquote>%s<cite>%s &nbsp;/&nbsp; %s</cite></blockquote>"
+                               % (E(q["text"]), E(q["ts"]), E(name)))
+                    break
+        if reads.get(t["id"]):
+            out.append("<p class='read'>%s</p>" % E(reads[t["id"]]))
+        out.append("</article>")
+    out.append("</div></section>")
+
+    # -- interview ------------------------------------------------------------
+    qs = data.get("open_questions") or []
+    answers = data.get("answers") or {}
+    if qs:
+        out.append("<section><h2>%s</h2><p class='note'>%s</p><div class='qs'>"
+                   % ("What the interview settled" if confirmed else "Before this can be a verdict",
+                      "A regex cannot tell a missing ability from a missing opportunity, or your "
+                      "own words from text you pasted. These were asked directly."))
+        for q in qs:
+            a = answers.get(q["id"])
+            out.append("<div class='q%s'>" % (" block" if q.get("blocking") and not a else ""))
+            out.append("<span class='tag'>%s%s</span>"
+                       % (E(q["kind"].upper()), " · BLOCKING" if q.get("blocking") else ""))
+            out.append("<p class='ask'>%s</p>" % E(q["ask"]))
+            out.append("<p class='why'>%s%s</p>"
+                       % (E(q["why"]),
+                          " — watch for: " + E(q["observe"]) if q.get("observe") else ""))
+            if a:
+                note = a.get("note") or ""
+                out.append("<p class='ans'><b>%s</b>%s</p>"
+                           % (E(str(a.get("answer", ""))), " — " + E(note) if note else ""))
+            out.append("</div>")
+        out.append("</div></section>")
+
+    # -- cross-cutting --------------------------------------------------------
+    b = data["borrowed"]
+    out.append("<section><h2>Across all six</h2><p class='note'>Each metric twice: over every "
+               "message extracted, and over your own words only. The gap is pasted text.</p>"
+               "<div class='scroll'><table><thead><tr><th>metric</th><th>all extracted</th>"
+               "<th>your words only</th></tr></thead><tbody>")
+    for key, label in (("correction_oneshot", "corrections that landed in one go"),
+                       ("acceptance_in_request", "requests carrying a finish line"),
+                       ("telegraphic", "short messages with no resolvable referent")):
+        allv, ownv = b[key]["all"], b[key]["own"]
+        out.append("<tr><td>%s</td><td class='num'>%s%% (%d/%d)</td>"
+                   "<td class='num'>%s%% (%d/%d)</td></tr>"
+                   % (E(label), allv["pct"], allv["n"], allv["denom"],
+                      ownv["pct"], ownv["n"], ownv["denom"]))
+    out.append("</tbody></table></div></section>")
+
+    # -- limits ---------------------------------------------------------------
+    out.append("<section><h2>Reasons to doubt this page</h2><div class='qs'>")
+    for head, body in (
+        ("Zero is not absence",
+         "A signal at zero can mean the vocabulary missed it. On the corpus this was built "
+         "against, one type read 0 until the patterns were widened, then read 3. Widening them "
+         "until they match quotes you already chose is fitting the instrument to the answer, so "
+         "any remaining zero is printed as zero."),
+        ("Pasted text still gets through",
+         E(auth["limit"]) + " Being counted as yours is not proof that you wrote it."),
+        ("The reader's own habits are in here",
+         "Whoever chose these patterns decided what counts as evidence. If that was an agent "
+         "that had just read your rules, it will tend to find the things your rules talk about."),
+    ):
+        out.append("<div class='q'><p class='ask'><b>%s</b></p><p class='why'>%s</p></div>"
+                   % (E(head), body))
+    out.append("</div></section>")
+
+    out.append("<footer><div>Six types after the Water Divination in Yoshihiro Togashi's "
+               "<i>HUNTER&nbsp;&times;&nbsp;HUNTER</i>, re-read as aptitudes of the person "
+               "directing an AI.</div>")
+    out.append("<div>signals v%s &nbsp;/&nbsp; report v%s &nbsp;/&nbsp; window %s &rarr; %s</div>"
+               % (E(data.get("signals_version", "?")), REPORT_VERSION,
+                  E(w.get("from", "?")), E(w.get("to", "?"))))
+    out.append("</footer></div></body></html>")
+    return "\n".join(out)
+
+
+def _self_test():
+    ok = True
+
+    def check(label, cond, detail=""):
+        nonlocal ok
+        ok = ok and bool(cond)
+        print(("PASS  " if cond else "FAIL  ") + label + ("  " + detail if detail else ""))
+
+    data = {
+        "signals_version": "1",
+        "window": {"from": "2026-08-01T10:00", "to": "2026-08-31T10:00"},
+        "own": 40, "scanned": 44, "sessions": 5, "length": {"median": 30, "max": 900},
+        "authorship": {"own": 40, "paste_suspect": {"n": 4, "denom": 44, "pct": 9.1},
+                       "by_kind": {"structured": 3, "attributed": 1}, "samples": [],
+                       "limit": "Plain pasted prose still gets through."},
+        "types": [
+            {"id": "sousa", "label": "操作系", "label_en": "Manipulator", "gloss": "steering",
+             "reaction": "the leaf moves",
+             "signals": {"rulemaking": {"n": 6, "denom": 40, "pct": 15.0}},
+             "quotes": {"rulemaking": [{"ts": "2026-08-03T10:00", "session": "s",
+                                        "source": "fixture", "chars": 30, "paste": None,
+                                        "text": "from now on <b>always</b> & forever"}]}},
+            {"id": "tokushitsu", "label": "特質系", "label_en": "Specialist", "gloss": "combo",
+             "reaction": "something else", "signals": None, "quotes": {},
+             "reason": "no detector by design"},
+        ],
+        "borrowed": {
+            "correction_oneshot": {"all": {"n": 7, "denom": 26, "pct": 26.9},
+                                   "own": {"n": 6, "denom": 6, "pct": 100.0}},
+            "acceptance_in_request": {"all": {"n": 1, "denom": 10, "pct": 10.0},
+                                      "own": {"n": 1, "denom": 9, "pct": 11.1}},
+            "telegraphic": {"all": {"n": 2, "denom": 44, "pct": 4.5},
+                            "own": {"n": 2, "denom": 40, "pct": 5.0}}},
+        "open_questions": [{"id": "probe_tokushitsu", "kind": "probe", "type": "tokushitsu",
+                            "why": "not enough quotes", "ask": "Weave the three ideas into one.",
+                            "observe": "does selection happen", "blocking": False}],
+    }
+
+    prov = render(data)
+    check("provisional state is stated on the page", "PROVISIONAL" in prov)
+    check("open questions are rendered when unanswered", "Weave the three ideas" in prov)
+    check("transcript text is escaped, not injected",
+          "&lt;b&gt;always&lt;/b&gt; &amp; forever" in prov and "<b>always</b>" not in prov)
+    check("no external resource is referenced",
+          "http://" not in prov and "https://" not in prov)
+    check("all three theme states define the palette",
+          prov.count("--ground:") >= 3 and "prefers-color-scheme:dark" in prov)
+    check("body paints its own background", "body{margin:0;background:var(--ground)" in prov)
+    check("the type with no detector says so", "No detector, by design" in prov)
+    check("the source of the six types is credited",
+          "HUNTER" in prov and "Togashi" in prov)
+    check("a zero-hit signal renders without a bar width",
+          'class="f zero"' in render(dict(data, types=[
+              dict(data["types"][0], signals={"x": {"n": 0, "denom": 40, "pct": 0.0}},
+                   quotes={})] + data["types"][1:])))
+
+    data2 = dict(data)
+    data2["verdict"] = {"confirmed": True, "main": "sousa", "title": "Water Divination",
+                        "roles": {"sousa": "main"}, "reads": {"sousa": "held across the period"},
+                        "summary": "Manipulator, on evidence."}
+    data2["answers"] = {"probe_tokushitsu": {"answer": "pass", "note": "wove them"}}
+    conf = render(data2)
+    check("confirmed state is stated on the page", "CONFIRMED" in conf and "PROVISIONAL" not in conf)
+    check("the main type is marked on its vessel", "data-tag='MAIN'" in conf)
+    check("answers are shown beside their questions", "wove them" in conf)
+
+    print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
+    return 0 if ok else 1
+
+
+def main():
+    ap = argparse.ArgumentParser(description="render a divination result as one HTML page")
+    ap.add_argument("result", nargs="?", help="JSON produced by water_divination.py")
+    ap.add_argument("--out", default="water-divination.html")
+    ap.add_argument("--self-test", action="store_true")
+    args = ap.parse_args()
+
+    if args.self_test:
+        return _self_test()
+    if not args.result:
+        ap.error("give a result JSON, or --self-test")
+
+    with io.open(args.result, encoding="utf-8") as f:
+        data = json.load(f)
+    with io.open(args.out, "w", encoding="utf-8") as f:
+        f.write(render(data))
+    print("[nen-report] alive: wrote=%s bytes=%d" % (args.out, os.path.getsize(args.out)))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+
+# your own config and your own readings: both contain private paths and private words
+water-divination.json
+out/

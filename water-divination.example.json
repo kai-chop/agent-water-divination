@@ -1,0 +1,36 @@
+{
+  "_readme": "Copy to water-divination.json and edit. Every path is a key; nothing is hardcoded. A source whose root does not exist is skipped silently, but the scan report always names what was actually read, so 'configured' is never mistaken for 'ran'.",
+
+  "sources": [
+    { "format": "claude-code", "root": "~/.claude/projects" },
+    { "format": "codex", "root": "~/.codex/sessions" },
+
+    { "_disabled_examples": "delete the underscore prefix to enable",
+      "_chatgpt": { "format": "chatgpt-export", "root": "~/Downloads/chatgpt-export" },
+      "_own_corpus": { "format": "jsonl", "root": "./my-corpus" },
+      "_plain_text": { "format": "text", "root": "./notes" } }
+  ],
+
+  "_patterns": "Signals are OR-ed across every file listed, so a bilingual corpus needs both. The order decides the language you read: glosses, probe questions and 'what to watch for' all come from the FIRST file. Put your own language first.",
+  "patterns": ["patterns/en.json", "patterns/ja.json"],
+
+  "_short_chars": "Upper bound for a 'short message'. 40 is tuned for Japanese; an English corpus wants roughly 100-120, since Japanese carries about twice the meaning per character.",
+  "short_chars": 40,
+
+  "_paste_min_chars": "Below this length, a message is never treated as pasted. Same scaling note as above.",
+  "paste_min_chars": 300,
+
+  "_attribution_head_chars": "How far into a message to look for 'according to X'. Kept small on purpose: searching the whole message also catches messages that merely talk about another agent, which are some of the most characteristic things an operator writes.",
+  "attribution_head_chars": 40,
+
+  "_skip_prefixes": "Harness-injected text that lands in the user slot. Add your own agent's markers here.",
+  "skip_prefixes": [
+    "<command-name>",
+    "<local-command",
+    "<environment_context",
+    "<user_instructions",
+    "Caveat:",
+    "This session is being continued",
+    "[Request interrupted"
+  ]
+}

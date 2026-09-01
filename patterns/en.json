@@ -1,0 +1,95 @@
+{
+  "language": "en",
+  "version": "1",
+  "note": "Written by translating the intent of the Japanese set, NOT by measuring an English corpus. The Japanese patterns were checked against a real 505-message corpus; these have only fixture coverage. Treat English counts as weaker evidence than Japanese ones until someone measures them.",
+  "source": "Water Divination = the nen aptitude test from Yoshihiro Togashi's HUNTER x HUNTER, re-read as six aptitudes of the person directing an AI. See README.",
+  "case_insensitive": true,
+  "types": {
+    "kyouka": {
+      "label": "強化系",
+      "label_en": "Enhancer",
+      "gloss": "Holding the goal and its constraints all the way through, so the core survives every new idea",
+      "reaction": "the water rises",
+      "signals": {
+        "constraint": "\\b(must|must not|never|always|constraint|requirement|non-negotiable|do not|don't)\\b",
+        "restate_goal": "\\b(the goal is|the point is|the objective|originally|to be clear|what we are doing|what we're doing|remember that we)\\b",
+        "hold_line": "\\b(don't change|do not change|leave (it|that) as is|keep (it|that) (as is|unchanged)|don't touch|stick to|same as before)\\b"
+      }
+    },
+    "houshutsu": {
+      "label": "放出系",
+      "label_en": "Emitter",
+      "gloss": "Getting the finished picture out of your head and into the agent — what stays, what changes, what counts as done",
+      "reaction": "the water changes colour",
+      "signals": {
+        "finished_image": "\\b(i want|i'd like|i would like|should look like|should end up|the end result|when it's done|when it is done|ideally|so that it|it should feel)\\b",
+        "example": "\\b(for example|for instance|e\\.g\\.|such as|imagine|think of|kind of like|sort of like)\\b"
+      }
+    },
+    "henka": {
+      "label": "変化系",
+      "label_en": "Transmuter",
+      "gloss": "Turning a feeling or a borrowed structure into another form — 'something's off' into a checkable criterion, another field's shape into this project's",
+      "reaction": "the water changes taste",
+      "signals": {
+        "metaphor": "\\b(like a|as if|think of it as|analogous|the way [a-z]+ does|it's basically a|reads like)\\b",
+        "criterion": "\\b(criteri(on|a)|how (you|to) tell|the test is|measurable|observable|define it as|what counts as|rule of thumb)\\b",
+        "transplant": "\\b(borrow(ed)? from|port(ed)? (it |the )?from|same idea as|adapt(ed)? from|apply .{0,20} to|the way .{0,20} handles|steal(ing)? from)\\b"
+      }
+    },
+    "gugenka": {
+      "label": "具現化系",
+      "label_en": "Conjurer",
+      "gloss": "Turning a vague ideal into a spec and a finish line — not 'make it good' but 'it is done when X'",
+      "reaction": "sediment appears",
+      "signals": {
+        "spec": "\\b(spec|specification|acceptance|edge case|exception|contract|schema|format|invariant|interface)\\b",
+        "verify": "\\b(verify|check|confirm|make sure|run the tests?|actually|really|prove)\\b"
+      }
+    },
+    "sousa": {
+      "label": "操作系",
+      "label_en": "Manipulator",
+      "gloss": "Steering the agent's direction and its rules — not only fixing the wrong output, but making a rule that stops it recurring",
+      "reaction": "the leaf moves",
+      "signals": {
+        "rulemaking": "\\b(from now on|going forward|every time|next time|never again|make it a rule|add (it|this|that) to the rules|permanently|by default from here)\\b",
+        "correction": "\\b(no,|not that|that's wrong|that is wrong|incorrect|i meant|instead of|rather than|redo|start over)\\b",
+        "metacog": "\\b(misunderstand|misread|assumption|assumed|interpret|we're not aligned|what i meant|talking past)\\b"
+      }
+    },
+    "tokushitsu": {
+      "label": "特質系",
+      "label_en": "Specialist",
+      "gloss": "A combination the other five cannot account for",
+      "reaction": "something else entirely",
+      "signals": null,
+      "reason": "Its definition is 'what the other five cannot explain', so any regex written for it would grant it to everyone. It is recognised only with two verified quotes plus one line each on why the other five do not already explain them."
+    }
+  },
+  "probes": {
+    "_note": "Asked only for a type the corpus could not produce two quotes for. What is observed is the shape of the answer, not whether it is right.",
+    "kyouka": "State the goal of what you're working on in one sentence, together with three constraints you will not drop.",
+    "houshutsu": "Describe the finished state in three parts: how it looks, how it feels to use, and how it ends.",
+    "henka": "Take that 'something's off' and rewrite it as an observation someone else could check without you.",
+    "gugenka": "Write, in one line, the condition under which a *machine* could tell this is finished.",
+    "sousa": "Write, in one line, the rule that would stop this particular mismatch from happening again.",
+    "tokushitsu": "Take the three loose ideas on the table and weave them into a single structure or world."
+  },
+  "observe": {
+    "kyouka": "Do the constraints serve the goal, or displace it?",
+    "houshutsu": "Does the finished picture actually leave their head? Does it say what counts as success?",
+    "henka": "Does the feeling become an observable? Does anything get carried in from another field?",
+    "gugenka": "Can they write it without subjective words? Do they attach an exception?",
+    "sousa": "Does it stop at this one fix, or become a rule for the class?",
+    "tokushitsu": "Does selection and re-composition happen, or is it just a list?"
+  },
+  "shared": {
+    "request": "\\b(please|can you|could you|i need you to|go ahead and)\\b|^(make|fix|write|add|update|remove|run|build|change)\\b",
+    "acceptance": "\\b(done when|success (is|means)|acceptance criteri|exit 0|tests? (should )?pass|until .{0,25} (green|passes)|it works if|counts as done)\\b",
+    "vague_ref": "\\b(that thing|the above|earlier|the previous|that one|like before|the other day|as discussed)\\b",
+    "concrete": "([A-Za-z0-9_.\\-]{4,}|[/\\\\]|\\d{2,})",
+    "_attribution": "How someone names the source of text they are pasting, at the top of the message. Add the names of the assistants you actually use.",
+    "attribution": "\\b(according to|GPT|Gemini|Claude|ChatGPT|the other (ai|model|assistant)|another (ai|model|assistant)|copied from|pasting|quoting|here'?s what .{0,25} said|the reviewer said|it replied|its answer was)\\b"
+  }
+}

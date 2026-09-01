@@ -1,0 +1,30 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  self-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.9", "3.12"]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: nen_corpus self-test
+        run: python tools/nen_corpus.py --self-test
+      - name: nen_signals self-test
+        run: python tools/nen_signals.py --self-test
+      - name: nen_context self-test
+        run: python tools/nen_context.py --self-test
+      - name: nen_report self-test
+        run: python tools/nen_report.py --self-test
+      - name: water_divination self-test
+        run: python tools/water_divination.py --self-test
+      - name: demo corpus runs end to end
+        run: python tools/water_divination.py measure --since 2026-01-01 --config examples/demo.json --out out
