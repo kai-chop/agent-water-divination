@@ -400,9 +400,9 @@ def _self_test():
               "own=%d" % res["own"])
         check("an HTML page is written by measure",
               os.path.getsize(os.path.join(out, "water-divination.html")) > 2000)
-        check("the page starts out marked provisional",
-              "PROVISIONAL" in io.open(os.path.join(out, "water-divination.html"),
-                                       encoding="utf-8").read())
+        check("the page states what is unsettled as what would confirm it, not as a form",
+              "would confirm it" in io.open(os.path.join(out, "water-divination.html"),
+                                            encoding="utf-8").read())
         check("an answers template is written with one slot per question",
               set(json.load(io.open(os.path.join(out, "answers.json"), encoding="utf-8")
                             )["answers"]) == {q["id"] for q in res["open_questions"]})
@@ -423,8 +423,9 @@ def _self_test():
                                             answers=ans_path, out=out))
         check("verdict is issued once every blocking question is answered", rc == 0)
         page = io.open(os.path.join(out, "water-divination.html"), encoding="utf-8").read()
-        check("the confirmed page replaces the provisional one",
-              "CONFIRMED" in page and "PROVISIONAL" not in page)
+        check("the confirmed page asserts the type rather than hedging it",
+              "CONFIRMED" in page and "would confirm it" not in page
+              and "You are a" in page)
 
         no_main = dict(filled)
         no_main["verdict"] = dict(filled["verdict"], main="")

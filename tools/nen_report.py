@@ -72,6 +72,11 @@ h2{font-size:1.35rem;margin-bottom:.3rem}
 letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin:0}
 .note{color:var(--soft);font-size:.9rem;margin:0 0 1.5rem}
 .lede{color:var(--soft);max-width:34rem;margin:0}
+.verdict-line{margin:0;font-family:Georgia,"Hiragino Mincho ProN","Yu Mincho",serif;
+font-size:clamp(1.3rem,3.6vw,1.9rem);line-height:1.4}
+.verdict-line b{color:var(--water)}
+.verdict-line span{display:block;font-family:ui-monospace,monospace;font-size:.72rem;
+color:var(--faint);margin-top:.35rem;letter-spacing:.02em}
 .state{display:inline-block;font-family:ui-monospace,monospace;font-size:.66rem;letter-spacing:.14em;
 padding:.15rem .55rem;border:1px solid var(--line);color:var(--soft)}
 .state.confirmed{border-color:var(--water);color:var(--water)}
@@ -196,9 +201,34 @@ def render(data):
     out.append("<h1>%s<span class='sub'>%s</span></h1>"
                % (E(title), E(verdict.get("subtitle")
                               or "Measuring the person directing the AI, not the AI")))
+    # The page leads with a name, the way the reading does. A page whose first statement is
+    # "interview not complete" is a form, and nobody reads their own divination as a form.
+    axes = (data.get("effects") or {}).get("axes") or {}
+    label_of = {t["id"]: t["label"] for t in data["types"]}
+    en_of = {t["id"]: t["label_en"] for t in data["types"]}
+    # axes is keyed by axis id and a type may own several; older results omit the type field,
+    # in which case the key is the type
+    typed = [(a.get("type", k), a) for k, a in axes.items()]
+    reacted = sorted([(t, a) for t, a in typed if a.get("direction") == "for"],
+                     key=lambda p: -(p[1].get("lift") or 0))
+    lead = next((a for t, a in typed if t == main_id), None) if confirmed \
+        else (reacted[0][1] if reacted else None)
+    named = main_id if confirmed else (reacted[0][0] if reacted else None)
+
+    if named:
+        out.append("<p class='verdict-line'>%s <b>%s</b><span>%s</span></p>"
+                   % ("You are a" if confirmed else "It looks like a",
+                      E("%s / %s" % (label_of.get(named, named), en_of.get(named, ""))),
+                      E("  ·  %s, %s%% against %s%%"
+                        % (lead["label"], lead["pct"], lead["base_pct"]))
+                      if lead and lead.get("base_pct") is not None else ""))
+    pending = len([q for q in (data.get("open_questions") or [])
+                   if q.get("blocking") and not (data.get("answers") or {}).get(q["id"])])
     out.append("<p><span class='state %s'>%s</span></p>"
                % ("confirmed" if confirmed else "provisional",
-                  "CONFIRMED" if confirmed else "PROVISIONAL — interview not complete"))
+                  "CONFIRMED" if confirmed
+                  else "not settled — %d answer%s would confirm it"
+                       % (pending, "" if pending == 1 else "s")))
     if verdict.get("summary"):
         out.append("<p class='lede'>%s</p>" % E(verdict["summary"]))
     out.append("<dl class='facts'>")
@@ -491,7 +521,10 @@ def _self_test():
     }
 
     prov = render(data)
-    check("provisional state is stated on the page", "PROVISIONAL" in prov)
+    check("the page leads with a name, not with a form",
+          "It looks like a" in prov and "Manipulator" in prov)
+    check("what is unsettled is stated as what would confirm it",
+          "would confirm it" in prov and "PROVISIONAL" not in prov)
     check("open questions are rendered when unanswered", "Weave the three ideas" in prov)
     check("transcript text is escaped, not injected",
           "&lt;b&gt;always&lt;/b&gt; &amp; forever" in prov and "<b>always</b>" not in prov)

@@ -61,6 +61,29 @@ python tools/nen_context.py "a distinctive fragment"
 
 Exit 1 means the quote is not in the corpus — then it cannot be used, no matter how good it sounds.
 
+#### The route, and the questions you should expect
+
+Whoever is holding the glass, the shape is the same. Two questions usually stand between a
+reading and a name, and both are folded — ask each once, with the cases listed.
+
+```
+measure ──► a name ──► two questions ──► verdict ──► the ledger row
+            (widest      attribution      refuses      the only thing that
+             separation)  authorship      until both   survives the corpus
+                                          are answered
+```
+
+| Question | What it settles | What a "no" does |
+|---|---|---|
+| `attribution` | Whether the cases an axis counted were the same kind of work as the rest | "the easier ones" — say so in the reading; the axis stops being an aptitude claim |
+| `authorship` | Whether the quotes behind the reading are the operator's own words | naming one drops exactly that quote, and a type can lose its verdict with it |
+| `probe` *(optional)* | A type the corpus could not show — ask its probe and watch the shape of the reply | fail: the type is not named this time |
+| `occasion` *(optional)* | Whether a zero means no ability or no opportunity | "no occasion" — it is not a weakness |
+| `residual` *(optional)* | Whether the leftover holds something the five do not describe | "nothing here" is the ordinary answer |
+
+Do not invent questions beyond these, and do not unfold the folded ones. If the operator answers
+"same kind" and "all mine", you are one command from a name — go there rather than asking more.
+
 ### 3. Verdict
 
 Fill the `verdict` block in the answers file (`main`, `roles`, `reads`, `summary`), then:
