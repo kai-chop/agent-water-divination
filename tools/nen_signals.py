@@ -10,8 +10,8 @@ correction word. A number here is a reason to go read the original, not a findin
 
 **Effects.** Whether exercising an aptitude changed anything, on six axes that each have their own
 outcome, denominator and unit -- see the comment above `measure_effects` for why one shared outcome
-cannot work. Plus the rare-event catalogue, which is how Specialist is measured: not a rate, but
-conjunctions that are hard to satisfy by accident.
+cannot work. Plus **the residual**: the messages none of the five explain, which is where
+Specialist is looked for. Nothing scores the residual; it is handed over for a reader to judge.
 
 **Open questions.** The gap between what a regex can see and what a verdict needs, written as
 questions someone can actually answer:
@@ -22,14 +22,15 @@ questions someone can actually answer:
 - `occasion` -- a signal or an axis sits at zero, and zero has two meanings: no ability, or no
   opportunity. Only the person can say which, and the difference decides whether it is a weakness.
 - `attribution` -- an axis produced a rate; were the cases it counted the same kind of work?
-- `rare` -- a rare event fired; was it deliberate?
+- `residual` -- here is what the five do not explain; is there anything characteristic in it?
 
 Questions marked `blocking` are the ones a verdict may not be issued without. That gate lives in
 water_divination.py, which refuses to print a verdict while any blocking question is unanswered.
 
-特質系 (Specialist) has no *signal* detector on purpose. Its definition is "the combination the
-other five cannot explain", so any regex scoring it would grant it to everybody; it is reached
-through the rare-event catalogue instead.
+特質系 (Specialist) has no detector, and gets no catalogue of "rare shapes" either -- a catalogue
+would just be somebody's invented patterns wearing a different hat. Its definition is what the
+other five cannot explain, so the machine isolates exactly that and stops. Whether the leftover
+holds something characteristic, and why, is said by the reader.
 
 Self-test: python tools/nen_signals.py --self-test
 """
@@ -182,7 +183,7 @@ def measure(msgs, pattern_sets, cfg, samples=SAMPLES_PER_SIGNAL):
             "own": len(own),
             "paste_suspect": rate(len(pasted), len(msgs)),
             "by_kind": {k: sum(1 for m in pasted if m["paste"] == k)
-                        for k in ("structured", "attributed")},
+                        for k in ("structured", "attributed", "machine")},
             "samples": [quote(m, 120) for m in spread(pasted, samples)],
             "limit": "Pasted plain prose that names no source is still counted as the operator's.",
         },
@@ -291,14 +292,23 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
         "gugenka": _axis_finish_line_verified(by_session, rx),
         "sousa": _axis_rules_that_stuck(by_session, rx),
     }
-    rare = _rare_events(by_session, rx)
+    type_rx = {tid: _alt(pattern_sets, lambda ps, t=tid: "|".join(
+        v for v in ((ps.get("types", {}).get(t) or {}).get("signals") or {}).values()))
+        for tid in type_order(pattern_sets) if signal_names(pattern_sets, tid)}
+    # Stating a finish line lives in the shared `acceptance` pattern because the Conjurer axis
+    # needs it as a denominator, but it is Conjurer behaviour and has to count as explained --
+    # otherwise "done when the tests pass" lands in the residual as something unaccounted for.
+    if "gugenka" in type_rx and rx["acceptance"]:
+        type_rx["gugenka"] = re.compile("(?:%s)|(?:%s)" % (type_rx["gugenka"].pattern,
+                                                           rx["acceptance"].pattern))
+    residual = _residual(by_session, rx, type_rx)
 
     agent_turns = sum(1 for e in events if e["kind"] == "assistant")
     misreads = sum(1 for e in events if e["misread"])
     halves = _misread_halves(events)
     return {
         "axes": axes,
-        "rare": rare,
+        "residual": residual,
         "assistant_turns": agent_turns,
         "misreads": {
             "n": misreads,
@@ -466,105 +476,89 @@ def _axis_rules_that_stuck(by_session, rx):
     return _axis("sousa", mechanised, total, ev)
 
 
-# ---------------------------------------------------------------- rare events
-# 特質系 is the type you cannot train into. Measuring it as a rate would hand it to everyone, so
-# it is not a rate: it is a catalogue of conjunctive events that are hard to satisfy by accident.
-# Each one needs three or four separate things to line up in the right order. Finding one is the
-# point -- the report names it and shows the moment, because that is the interesting part of a
-# reading, not another percentage.
+# ---------------------------------------------------------------- the residual
+# 特質系 is defined as what the other five cannot explain, so the machine's job here is not to
+# recognise it. Any catalogue of "rare" shapes would be somebody's invented patterns wearing a
+# different hat -- the exact mistake the five signals already risk, committed one level up.
 #
-# Honest limit: "rare" here means rare **by construction**, not rare compared with other people.
-# There is no cross-operator baseline in this repo and inventing one would be a fabrication.
+# So this isolates the **residual**: your messages that none of the five types' signals account
+# for, that nonetheless did something. Within that residual it ranks by how unusual the wording is
+# *against your own corpus* -- not against a list, and not against other people. Nothing here
+# decides that a message is special. It hands over what is left over, and the reader says whether
+# there is anything characteristic in it.
 
-RARE_EVENTS = [
-    ("mechanised_lesson", "A lesson that became machinery",
-     "A correction, then a rule, then that rule written into a file, hook or config -- all in "
-     "one session. The failure stopped depending on anyone remembering it."),
-    ("externalised_sense", "A feeling turned into a check",
-     "'Something is off', then a criterion someone else could apply, then the agent verifying "
-     "against it. The whole path from taste to test, in one stretch."),
-    ("confluence", "Separate sources woven into one thing",
-     "Material you pasted from elsewhere, your own instruction, and a write into a durable "
-     "artifact -- combined in a single session rather than handled one at a time."),
-    ("invited_refutation", "Asking to be proven wrong before starting",
-     "You asked for a counter-example or an objection to your own framing before the work "
-     "began, rather than after it failed."),
-]
+MIN_RESIDUAL_CHARS = 24      # below this there is not enough to be distinctive about
+MIN_RESIDUAL_TOKENS = 4
+RESIDUAL_CANDIDATES = 6
 
-REFUTATION_RX = r"(反例|反証|否定側|逆に言うと.{0,10}おかしい|穴があれば|間違っていたら教えて|" \
-                r"counter-?example|argue against|prove me wrong|poke holes|what would break)"
+_LATIN = re.compile(r"[A-Za-z][A-Za-z'\-]{2,}")
+_CJK = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
 
 
-STEP_GAP = 6      # messages of yours the next step must land within, or the chain is not one act
+def _tokens(text):
+    """Latin words plus CJK character bigrams -- enough to compare wording across a corpus that
+    mixes both, without a tokenizer dependency."""
+    out = set(m.group(0).lower() for m in _LATIN.finditer(text))
+    squeezed = re.sub(r"\s+", "", text)
+    for i in range(len(squeezed) - 1):
+        if _CJK.match(squeezed[i]):
+            out.add(squeezed[i:i + 2])
+    return out
 
 
-def _rare_events(by_session, rx):
-    """Return the rare events that actually fired, each with the moment it happened.
+def _residual(by_session, rx, type_rx):
+    """What the five do not account for, ranked by how unusual it is against your own corpus."""
+    import math
 
-    Two rules keep these rare instead of merely frequent. The steps must land **in order and
-    close together** -- a correction on Monday and a rule on Friday are two things that happened,
-    not one act -- and a session may contribute **at most one** of each, so a long session cannot
-    manufacture a streak. The first version of this ignored both and reported 41 "rare" events in
-    a month, which is a counter, not a find.
-    """
-    import re as _re
-    refute = _re.compile(REFUTATION_RX)
-    found = {key: {"key": key, "label": label, "definition": defn, "n": 0, "evidence": []}
-             for key, label, defn in RARE_EVENTS}
-
+    mine, df, total = [], defaultdict(int), 0
     for evs in by_session.values():
-        idx = _users(evs)
-        pos_of = {i: p for p, i in enumerate(idx)}
+        for p, i in enumerate(_users(evs)):
+            e = evs[i]
+            toks = _tokens(e["text"])
+            total += 1
+            for t in toks:
+                df[t] += 1
+            explained = sorted(tid for tid, r in type_rx.items() if r and r.search(e["text"]))
+            nxt = _users(evs)[p + 1] if p + 1 < len(_users(evs)) else len(evs)
+            span = evs[i + 1:nxt]
+            mine.append({"event": e, "tokens": toks, "explained": explained,
+                         "tools": sum(1 for x in span if x["kind"] == "tool"),
+                         "mechanism": any(x["kind"] == "tool" and x["mechanism"] for x in span),
+                         "verified": any(x["kind"] == "assistant" and x["verify"] for x in span)})
 
-        def step(pred, after_pos=-1):
-            """First of your messages matching pred, within STEP_GAP messages of the last step."""
-            for p in range(after_pos + 1, len(idx)):
-                if after_pos >= 0 and p - after_pos > STEP_GAP:
-                    return None
-                if pred(evs[idx[p]]["text"]):
-                    return p
-            return None
+    leftover = [m for m in mine
+                if not m["explained"]
+                and len(m["event"]["text"]) >= MIN_RESIDUAL_CHARS
+                and len(m["tokens"]) >= MIN_RESIDUAL_TOKENS
+                and (m["tools"] or m["mechanism"])]
 
-        def tool_after(p, pred):
-            start = idx[p]
-            stop = idx[p + STEP_GAP] if p + STEP_GAP < len(idx) else len(evs)
-            return any(pred(e) for e in evs[start + 1:stop])
+    for m in leftover:
+        m["unusualness"] = round(
+            sum(math.log(total / df[t]) for t in m["tokens"]) / len(m["tokens"]), 3)
+    leftover.sort(key=lambda m: -m["unusualness"])
 
-        c = step(lambda t: bool(rx["correction"] and rx["correction"].search(t)))
-        if c is not None:
-            r = step(lambda t: bool(rx["rulemaking"] and rx["rulemaking"].search(t)), c)
-            if r is not None and tool_after(r, lambda e: e["kind"] == "tool" and e["mechanism"]):
-                _hit(found["mechanised_lesson"], evs[idx[r]])
-
-        v = step(lambda t: bool(rx["vague"] and rx["vague"].search(t)))
-        if v is not None:
-            k = step(lambda t: bool(rx["concrete_criterion"]
-                                    and rx["concrete_criterion"].search(t)), v)
-            if k is not None and tool_after(k, lambda e: e["kind"] == "assistant" and e["verify"]):
-                _hit(found["externalised_sense"], evs[idx[v]])
-
-        # confluence needs material you brought in from elsewhere AND your own instruction close
-        # to it AND something durable written -- all three inside one stretch, not one session
-        for p, i in enumerate(idx):
-            if not (rx["request"] and rx["request"].search(evs[i]["text"])):
-                continue
-            near = evs[max(0, i - 3):i]
-            brought_in = any(e["kind"] == "user" and e.get("paste") for e in near)
-            if brought_in and tool_after(p, lambda e: e["kind"] == "tool" and e["mechanism"]):
-                _hit(found["confluence"], evs[i])
-                break
-
-        rf = step(lambda t: bool(refute.search(t)))
-        if rf is not None:
-            _hit(found["invited_refutation"], evs[idx[rf]])
-
-    return [f for f in found.values() if f["n"]]
-
-
-def _hit(entry, event):
-    entry["n"] += 1
-    if len(entry["evidence"]) < 3:
-        entry["evidence"].append(quote(event, 200))
+    return {
+        "messages_examined": total,
+        "explained_by_the_five": total - sum(1 for m in mine if not m["explained"]),
+        "explained_pct": round(100.0 * (total - sum(1 for m in mine if not m["explained"]))
+                               / total, 1) if total else None,
+        "residual_that_did_something": len(leftover),
+        "candidates": [{
+            "ts": m["event"]["ts"][:16],
+            "text": m["event"]["text"][:240],
+            "unusualness": m["unusualness"],
+            "tool_calls": m["tools"],
+            "left_a_mechanism": m["mechanism"],
+            "agent_verified": m["verified"],
+        } for m in leftover[:RESIDUAL_CANDIDATES]],
+        "note": "None of the five types' signals fire on these, and each was followed by the "
+                "agent doing work. Ranked by wording unusual for your own corpus. The ranking "
+                "does not claim they are special -- it decides what is worth your attention "
+                "first.",
+        "how_to_read": "Specialist is recognised only if you look at these and find something "
+                       "characteristic that the other five genuinely do not describe. Finding "
+                       "nothing is the ordinary outcome.",
+    }
 
 
 def _misread_halves(events):
@@ -675,17 +669,24 @@ def open_questions(result, pattern_sets, cfg):
             "blocking": True,
         })
 
-    for r in (result.get("effects", {}).get("rare") or []):
+    res = (result.get("effects") or {}).get("residual") or {}
+    if res.get("candidates"):
         qs.append({
-            "id": "rare_%s" % r["key"],
-            "kind": "rare",
+            "id": "residual",
+            "kind": "residual",
             "type": "tokushitsu",
-            "why": "%s — fired %d time(s). %s" % (r["label"], r["n"], r["definition"]),
-            "ask": "Was this deliberate, or did it happen to fall out that way?",
-            "observe": "Specialist is recognised on the deliberate ones. Confirm it with the "
-                       "moment shown, not with the count.",
-            "answer_format": "deliberate | accident | not what happened",
-            "blocking": True,
+            "why": "The five types' signals account for %s%% of your messages. %d of the rest "
+                   "were followed by the agent doing work; these are the %d whose wording is "
+                   "least like the rest of your corpus."
+                   % (res["explained_pct"], res["residual_that_did_something"],
+                      len(res["candidates"])),
+            "ask": "Read these. Is there something here the other five genuinely do not "
+                   "describe — something that is characteristically you?",
+            "observe": "Nothing in the tool says these are special; it only says the five do "
+                       "not explain them. Finding nothing here is the ordinary outcome.",
+            "answer_format": "name what it is | nothing here",
+            "blocking": False,
+            "items": res["candidates"],
         })
 
     if result["authorship"]["paste_suspect"]["n"]:
@@ -892,34 +893,64 @@ def _self_test():
     check("a rule you pasted from somewhere else is not your steering",
           measure_effects(pasted_rule, pats, cfg)["axes"]["sousa"]["n"] == 0)
 
-    # -- rare events: order and proximity are the whole definition ------------------------
-    chain = [ev("user", "no, that's wrong", s="r1"),
-             ev("user", "from now on print the diff", s="r1"),
-             ev("tool", tool="Edit", mechanism=True, s="r1")]
-    got = {r["key"]: r for r in measure_effects(chain, pats, cfg)["rare"]}
-    check("a correction, then a rule, then a rule file = one rare find",
-          got.get("mechanised_lesson", {}).get("n") == 1, str(list(got)))
-    check("the rare find carries the moment, not just a count",
-          bool(got["mechanised_lesson"]["evidence"][0]["text"]))
+    # -- the residual: what the five do not account for -----------------------------------
+    # Specialist is the leftover, so the tool must not decide anything about it. What is tested
+    # here is that the leftover is isolated correctly and that nothing scores it.
+    # Both explained messages are deliberately longer than MIN_RESIDUAL_CHARS, so that keeping
+    # them out of the residual proves the five explained them rather than that they were too short
+    # to consider -- the first version of this passed for exactly that wrong reason.
+    leftover_msg = "work the unspecified parts out from what I already told you, quietly"
+    explained_a = "you must not drop the constraint we agreed on"
+    explained_b = "no, that is wrong, I meant the other file entirely"
+    resid_tl = [ev("user", explained_a, s="q1"),
+                ev("tool", tool="Edit", s="q1"),
+                ev("user", leftover_msg, s="q1"),
+                ev("tool", tool="Edit", mechanism=True, s="q1"),
+                ev("user", explained_b, s="q1"),
+                ev("tool", tool="Edit", s="q1")]
+    res = measure_effects(resid_tl, pats, cfg)["residual"]
+    texts = [c["text"] for c in res["candidates"]]
+    check("a message no type's signal explains is isolated",
+          leftover_msg in texts, str(texts))
+    check("messages the five do explain stay out of the residual, despite being long enough",
+          not any(t.startswith(explained_a[:20]) or t.startswith(explained_b[:20])
+                  for t in texts)
+          and len(explained_a) > MIN_RESIDUAL_CHARS and len(explained_b) > MIN_RESIDUAL_CHARS,
+          str(texts))
+    check("the residual reports how much of you the five account for",
+          res["explained_pct"] == round(200.0 / 3, 1), str(res["explained_pct"]))
+    check("what the agent did about it travels with the candidate",
+          res["candidates"][0]["left_a_mechanism"] is True
+          and res["candidates"][0]["tool_calls"] == 1, str(res["candidates"][0]))
+    check("nothing in the residual is scored or named for you",
+          not any(k in res["candidates"][0] for k in ("label", "definition", "score", "verdict")),
+          str(sorted(res["candidates"][0])))
 
-    far = ([ev("user", "no, that's wrong", s="r2")]
-           + [ev("user", "please carry on", s="r2") for _ in range(STEP_GAP + 2)]
-           + [ev("user", "from now on print the diff", s="r2"),
-              ev("tool", tool="Edit", mechanism=True, s="r2")])
-    check("the same steps far apart are two events, not one act",
-          not any(r["key"] == "mechanised_lesson"
-                  for r in measure_effects(far, pats, cfg)["rare"]))
+    finish_line = [ev("user", "please rewrite the loader, done when the tests pass", s="q5"),
+                   ev("tool", tool="Edit", s="q5")]
+    check("stating a finish line counts as explained, not as leftover",
+          measure_effects(finish_line, pats, cfg)["residual"]["candidates"] == [],
+          str(measure_effects(finish_line, pats, cfg)["residual"]["candidates"]))
 
-    reversed_order = [ev("user", "from now on print the diff", s="r3"),
-                      ev("tool", tool="Edit", mechanism=True, s="r3"),
-                      ev("user", "no, that's wrong", s="r3")]
-    check("the steps out of order do not count",
-          not any(r["key"] == "mechanised_lesson"
-                  for r in measure_effects(reversed_order, pats, cfg)["rare"]))
+    idle = [ev("user", "ok", s="q2"), ev("user", "thanks", s="q2")]
+    check("leftovers that led to no work are not candidates",
+          measure_effects(idle, pats, cfg)["residual"]["candidates"] == [])
 
-    long_session = chain * 4
-    check("one session contributes at most one of each rare event",
-          measure_effects(long_session, pats, cfg)["rare"][0]["n"] == 1)
+    pasted_leftover = [ev("user", leftover_msg, s="q3", paste="machine"),
+                       ev("tool", tool="Edit", mechanism=True, s="q3")]
+    check("pasted machine output never reaches the residual",
+          measure_effects(pasted_leftover, pats, cfg)["residual"]["candidates"] == [])
+
+    common = "please fix the parser again"
+    odd = "the unspecified parts should be derived from precedent, quietly and without asking"
+    rank_tl = []
+    for i in range(6):
+        rank_tl += [ev("user", "%s %d" % (common, i), s="q4"), ev("tool", tool="Edit", s="q4")]
+    rank_tl += [ev("user", odd, s="q4"), ev("tool", tool="Edit", s="q4")]
+    ranked = measure_effects(rank_tl, pats, cfg)["residual"]["candidates"]
+    check("wording unusual for your own corpus is offered first",
+          ranked and ranked[0]["text"].startswith("the unspecified parts"),
+          str([c["text"][:30] for c in ranked]))
 
     # -- pattern audit: specificity is measurable even where sensitivity is not ------------
     rows = audit_patterns(pats, ["the quick brown fox", "nothing here matches anything"])

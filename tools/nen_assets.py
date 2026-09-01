@@ -236,9 +236,10 @@ def six_axes(types, w=1120, h=430, lang="en"):
             body.append(_text(850, top + 29, entry[1], 12, SOFT, MONO, anchor="start"))
         else:
             body.append(_text(250, top + 29,
-                              "not a rate -- a catalogue of rare events" if en else
-                              "率ではなく、稀少事象のカタログ", 13, LEAF, FONT, anchor="start"))
-            body.append(_text(850, top + 29, "finds" if en else "見つかったもの", 12, LEAF,
+                              "no axis -- what the other five do not explain" if en else
+                              "軸を持たない ―― 他の5系統が説明しない残り", 13, LEAF, FONT,
+                              anchor="start"))
+            body.append(_text(850, top + 29, "you read it" if en else "読むのは人", 12, LEAF,
                               MONO, anchor="start"))
 
     note = ("The first version scored all five against one shared outcome. Every type landed "
@@ -438,8 +439,8 @@ def _self_test():
               all(label in axes_svg for _tid, label, _u, _d in signals.axis_catalogue()))
         check("the axes diagram names each axis's own denominator",
               all(unit in axes_svg for _tid, _l, unit, _d in signals.axis_catalogue()))
-        check("the type with no axis is shown as finds, not as a blank row",
-              "catalogue of rare events" in axes_svg)
+        check("the type with no axis is shown as the leftover, not as a blank row",
+              "do not explain" in axes_svg)
         # a diagram that drops the tail of its own sentence is the failure this guards
         check("the refusal sentence is drawn whole, not truncated",
               "the verdict goes too" in blobs["gate.svg"])

@@ -88,24 +88,28 @@ longer requests carry more of every vocabulary and are harder. Adjusting for len
 hidden a structural fault behind a statistic. **If your six axes cannot disagree with each other,
 you do not have six axes.**
 
-## Specialist is a find, not a score
+## Specialist is the leftover, and the tool does not judge it
 
-Five reactions happen to the water; the sixth happens to the leaf. Specialist is measured
-differently for the same reason: as a **catalogue of rare events**, each needing three or four
-things to line up in order and close together.
+Five reactions happen to the water; the sixth happens to the leaf. Specialist gets no detector and
+no scoring, because its definition is *what the other five cannot explain* — and any list of "rare
+shapes" to look for would just be somebody's invented patterns wearing a different hat, which is
+the mistake the five signals already risk, committed one level up.
 
-- **A lesson that became machinery** — a correction, then a rule, then that rule written into a
-  file, hook or config, all in one stretch. The failure stopped depending on anyone remembering it.
-- **A feeling turned into a check** — "something's off", then a criterion someone else could
-  apply, then the agent verifying against it.
-- **Separate sources woven into one thing** — material brought in from elsewhere, your own
-  instruction beside it, and something durable written out of the combination.
-- **Asking to be proven wrong before starting** — you invited the counter-example while it was
-  still cheap.
+So the tool does one thing here: it isolates the **residual** — your messages that none of the
+five types' signals account for, and that the agent nonetheless went and did work on. It reports
+what share of you the five explain at all, and orders the leftover by how unusual the wording is
+*against your own corpus*. That order is a reading order. It is not a claim that anything in it is
+special.
 
-Most windows turn up none, and that is the expected result. Rare here means **rare by
-construction** — the definitions are hard to satisfy — not rare compared with other people. There
-is no cross-operator baseline in this repo, and inventing one would be a fabrication.
+Then a reader — you, or the agent running the reading — looks at the residual and says one of two
+things, with reasons: **there is something here the other five do not describe, and it is this**,
+or **there is not, and here is what the leftover turned out to be**. On the corpus this was built
+against, the five explain about 17% of the messages, and the residual surfaced instructions like
+*"work the unspecified parts out from what I already told you"* — which is not constraint-holding,
+not a finish line, not steering, and not a metaphor.
+
+"There is not" is the ordinary outcome. The moment you decide in advance what to count, it stops
+being a residual.
 
 ## What it found in the corpus it was built on
 

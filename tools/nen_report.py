@@ -276,27 +276,36 @@ def render(data):
 
     # -- the rare ones --------------------------------------------------------
     eff = data.get("effects") or {}
-    if "rare" in eff:
-        rare = eff["rare"]
-        out.append("<section><h2>The rare ones</h2><p class='note'>Specialist is not a rate. Each "
-                   "of these needs three or four things to line up, in order and close together, "
-                   "so most windows turn up none. Rare by construction — there is no "
-                   "cross-operator baseline here, and inventing one would be a fabrication.</p>")
-        if rare:
+    if "residual" in eff:
+        res = eff["residual"]
+        verdict_note = (verdict.get("specialist")
+                        or "Not yet read — Specialist is decided by looking at these, not by a "
+                           "number the tool produced.")
+        out.append("<section><h2>What the five do not explain</h2>"
+                   "<p class='note'>Specialist is the leftover, so nothing here is scored. The "
+                   "five types' signals account for <b>%s%%</b> of your messages; %d of the rest "
+                   "were followed by the agent doing work. These are the ones whose wording is "
+                   "least like the rest of your own corpus — a reading order, not a claim that "
+                   "they are special.</p>"
+                   % (res["explained_pct"], res["residual_that_did_something"]))
+        out.append("<p class='read' style='margin:-.8rem 0 1.4rem'><b>%s</b></p>" % E(verdict_note))
+        if res["candidates"]:
             out.append("<div class='finds'>")
-            for r in rare:
-                out.append("<article class='find'><h3>%s</h3><span class='count'>&times;%d</span>"
-                           % (E(r["label"]), r["n"]))
-                out.append("<p class='why'>%s</p>" % E(r["definition"]))
-                for q in r["evidence"][:2]:
-                    out.append("<blockquote>%s<cite>%s</cite></blockquote>"
-                               % (E(q["text"]), E(q["ts"])))
+            for c in res["candidates"]:
+                marks = ", ".join(filter(None, [
+                    "%d tool calls" % c["tool_calls"] if c["tool_calls"] else "",
+                    "left a mechanism" if c["left_a_mechanism"] else "",
+                    "agent verified" if c["agent_verified"] else ""]))
+                out.append("<article class='find'><h3>%s</h3>"
+                           "<span class='count'>%.2f</span>" % (E(c["ts"]), c["unusualness"]))
+                out.append("<blockquote>%s<cite>%s</cite></blockquote>"
+                           % (E(c["text"]), E(marks)))
                 out.append("</article>")
             out.append("</div>")
         else:
-            out.append("<div class='qs'><div class='q'><p class='ask'>None in this window.</p>"
-                       "<p class='why'>That is the expected result. These are finds, not scores.</p>"
-                       "</div></div>")
+            out.append("<div class='qs'><div class='q'><p class='ask'>Nothing left over that did "
+                       "anything.</p><p class='why'>The five cover this window. That is an "
+                       "ordinary outcome, not a gap.</p></div></div>")
         mr = eff.get("misreads") or {}
         if mr.get("per_100_agent_turns") is not None:
             trend = ""
@@ -422,10 +431,14 @@ def _self_test():
                                "n": 12, "hits": 10, "pct": 83.3, "enough": True,
                                "detail": "Followed by a write into a rule file.",
                                "evidence": []}},
-            "rare": [{"key": "mechanised_lesson", "label": "A lesson that became machinery",
-                      "definition": "A correction, then a rule, then a rule file.", "n": 1,
-                      "evidence": [{"ts": "2026-08-09T10:00", "text": "from now on <print> it",
-                                    "session": "s", "source": "", "chars": 20, "paste": None}]}],
+            "residual": {"messages_examined": 40, "explained_by_the_five": 30,
+                         "explained_pct": 75.0, "residual_that_did_something": 4,
+                         "candidates": [{"ts": "2026-08-09T10:00",
+                                         "text": "work the unspecified parts out from <what> I "
+                                                 "already said",
+                                         "unusualness": 5.71, "tool_calls": 26,
+                                         "left_a_mechanism": True, "agent_verified": True}],
+                         "note": "n", "how_to_read": "h"},
             "misreads": {"n": 3, "per_100_agent_turns": 0.75,
                          "first_half": {"n": 2, "per_100": 1.0},
                          "second_half": {"n": 1, "per_100": 0.5}, "note": "self-reported only."},
@@ -448,11 +461,12 @@ def _self_test():
           "HUNTER" in prov and "Togashi" in prov)
     check("each type carries its own effect axis, not a shared one",
           "DID IT WORK" in prov and "rules that became machinery" in prov)
-    check("a rare find is shown with its moment",
-          "A lesson that became machinery" in prov
-          and "from now on &lt;print&gt; it" in prov)
-    check("the rare section says rarity is by construction, not versus other people",
-          "no cross-operator baseline" in prov)
+    check("the residual is shown with what the agent did about it",
+          "work the unspecified parts out from &lt;what&gt; I already said" in prov
+          and "left a mechanism" in prov)
+    check("the page says how much of you the five actually explain", "75.0%" in prov)
+    check("Specialist is left to the reader rather than scored",
+          "decided by looking at these, not by a number" in prov)
     check("a corpus with no agent side is named as unmeasurable, not as zero effect",
           "No agent side in: jsonl" in prov)
     check("a zero-hit signal renders without a bar width",

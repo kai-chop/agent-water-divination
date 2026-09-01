@@ -76,11 +76,17 @@ tool working. Answer what it names and run it again.
    aptitude was exercised; the axis is the only thing that says it worked. A type with a strong
    signal and a weak axis is a habit, not an aptitude — say exactly that. A type whose axis had too
    few observations falls back to the vocabulary, and the reading says which one it rested on.
-3. **Specialist is recognised from finds, not from a count.** Take the rare events the tool
-   surfaced, show the operator the moment, and keep only the ones they confirm were deliberate.
-   Two confirmed finds recognise the type; describe what the combination was, in their terms.
-   With none, it is simply not recognised this window — that is the ordinary outcome, not a gap.
-   Never argue Specialist from a signal count; it has no detector for the reason in the README.
+3. **Specialist is you reading the residual, and saying why.** All the tool does is isolate the
+   messages none of the five explain that the agent nonetheless acted on. It claims nothing about
+   them — the order is "wording unusual for your own corpus", which is a reading order, not a
+   score. Your job is to read that residual and state, with reasons, one of:
+   - **there is a Specialist element** — what it is, and one line on why each of the other five
+     does not already describe it
+   - **there is not** — and what the residual turned out to be instead
+
+   Show the operator the quotes and confirm them. **"There is not" is the ordinary outcome**, not
+   a gap. Never argue Specialist from a count: the moment you decide what to count, it stops being
+   a residual and becomes another pattern.
 3. **Never fold ambiguity into a weakness.** When evidence points both ways, give both readings and
    say which way it leans. Rewriting a neutral or forced move as a flaw to look rigorous makes the
    reading worthless, and it is the most common way this goes wrong.

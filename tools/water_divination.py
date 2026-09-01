@@ -129,15 +129,18 @@ def run_measure(args):
         print("  %-12s %-42s  %5s%%  (%d/%d %s)"
               % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], ax["unit"]))
 
-    rare = eff["rare"]
-    print("\n  Specialist — rare events found: %d" % len(rare))
-    for r in rare:
-        print("    * %s  x%d" % (r["label"], r["n"]))
-        if r["evidence"]:
-            print("      %s  %s" % (r["evidence"][0]["ts"], r["evidence"][0]["text"][:88]))
-    if not rare:
-        print("    none this window. These need three or four things to line up in order;"
-              " most windows have none.")
+    res = eff["residual"]
+    print("\n  Specialist — what the five do not explain")
+    print("    the five account for %s%% of your messages; %d of the rest were followed by work"
+          % (res["explained_pct"], res["residual_that_did_something"]))
+    for c in res["candidates"]:
+        marks = "".join([" +mechanism" if c["left_a_mechanism"] else "",
+                         " +verified" if c["agent_verified"] else ""])
+        print("    * %s  (unusualness %.2f, %d tool calls%s)"
+              % (c["ts"], c["unusualness"], c["tool_calls"], marks))
+        print("      %s" % c["text"][:96].replace("\n", " / "))
+    if not res["candidates"]:
+        print("    nothing left over that did anything -- the five cover this window")
 
     mr = eff["misreads"]
     if mr["per_100_agent_turns"] is not None:

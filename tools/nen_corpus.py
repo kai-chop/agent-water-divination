@@ -251,9 +251,20 @@ def build_attribution_rx(patterns):
     return re.compile("|".join("(?:%s)" % a for a in alts)) if alts else None
 
 
+# Terminal output, tracebacks and tool transcripts pasted back in. No length floor applies here:
+# a single pasted stack frame is still not something anybody wrote. Left in, these dominate any
+# ranking by unusual wording, because log spam is almost entirely rare tokens.
+MACHINE_RX = re.compile(
+    r"<bash-(stdout|stderr|input)>|(^|\n)\s*[⎿│└├]|^\s*[\[{]\s*[\"{]"
+    r"|Traceback \(most recent call last\)|(^|\n)\s*File \"[^\"]+\", line \d+"
+    r"|(^|\n)\s*at [\w.$]+\(|error CS\d{4}"
+    r"|(^|\n)\s*(PreToolUse|PostToolUse|SessionStart|Stop hook)")
+
+
 def classify_paste(text, cfg, attribution_rx):
     """None = the operator's own words. Otherwise the shape of the suspicion.
 
+    'machine'    -- terminal output or a traceback pasted back in, at any length
     'structured' -- long and carrying markdown structure (an agent's output shape)
     'attributed' -- long and naming a source in its opening characters
 
@@ -261,6 +272,8 @@ def classify_paste(text, cfg, attribution_rx):
     names also catches messages that merely *talk about* another agent, which are some of the
     most characteristic things an operator writes.
     """
+    if MACHINE_RX.search(text):
+        return "machine"
     if len(text) < cfg["paste_min_chars"]:
         return None
     if PASTE_STRUCTURE_RX.search(text):
