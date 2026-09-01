@@ -84,6 +84,21 @@ measure ──► a name ──► two questions ──► verdict ──► the
 Do not invent questions beyond these, and do not unfold the folded ones. If the operator answers
 "same kind" and "all mine", you are one command from a name — go there rather than asking more.
 
+#### The portrait — the two or three sentences they keep
+
+Write it into `verdict.portrait`. **In the operator's own language**: if the corpus is Japanese the
+portrait is Japanese, and the tool's own wording follows the first pattern file listed.
+
+How to build it (**never paste the type's definition**):
+1. one sentence naming the move that two or three of their verified quotes have in common
+2. one sentence on what that move buys them
+3. one sentence on what it costs them — **leave this out and it becomes flattery**
+
+**The voice is a choice.** The one this repo was built around is the teacher who administers the
+test in the original: polite, step by step, no exaggeration, says plainly when something is not
+known, and names the cost before the benefit. Whatever voice you pick, two things are out: the
+fortune-teller's certainty, and "you are special".
+
 ### 3. Verdict
 
 Fill the `verdict` block in the answers file (`main`, `roles`, `reads`, `summary`), then:

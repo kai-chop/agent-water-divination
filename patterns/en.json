@@ -83,6 +83,27 @@
     "vague": "\\b(something('s| is) off|not quite|feels? (wrong|off)|somehow|a bit weird|hard to say|you know what i mean|meh)\\b",
     "concrete_criterion": "\\b(threshold|above \\d|below \\d|within \\d|criteri(on|a)|the test is|measurable|observable|counts? as|define it as|\\d+ ?(ms|px|%|s\\b))"
   },
+  "_axis_text": "Wording for the effect axes, one entry per axis. Taken from the first pattern file that has it, so the reading speaks the language of whoever is being read.",
+  "axis_text": {
+    "kyouka": ["sessions that held their constraint", "sessions",
+               "A constraint you stated, and no correction in the rest of that session.",
+               "sessions where you stated no constraint"],
+    "houshutsu": ["requests the agent did not have to fill in", "requests",
+                  "No question back, no stated assumption, no menu of options -- the picture arrived complete enough to act on.",
+                  "requests carrying no finished-picture wording"],
+    "henka": ["fuzzy starts that became checkable", "vague openings",
+              "'Something is off' followed, in the same session, by a criterion someone else could apply.",
+              "sessions that never started fuzzy"],
+    "gugenka": ["finish lines the agent actually checked against", "requests with a finish line",
+                "You said what done means, and the agent came back with evidence rather than a claim.",
+                "requests with no finish line"],
+    "sousa": ["rules that became machinery", "rules declared",
+              "Followed, before your next message, by a write into a rule file, hook or config.",
+              "your other requests"],
+    "sousa_oneshot": ["corrections that landed in one go", "corrections carrying a reason",
+                      "You said what was wrong and why, or what rule should prevent it, and did not have to correct the same thing again.",
+                      "bare corrections, with no reason attached"]
+  },
   "probes": {
     "_note": "Asked only for a type the corpus could not produce two quotes for. What is observed is the shape of the answer, not whether it is right.",
     "kyouka": "State the goal of what you're working on in one sentence, together with three constraints you will not drop.",

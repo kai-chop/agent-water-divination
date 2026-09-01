@@ -275,6 +275,7 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
     independently of each other. An axis with fewer than MIN_N observations reports `None` and
     says how many it had, rather than a rate computed from three data points.
     """
+    use_axis_text(pattern_sets)     # read in the language of whoever is being read
     rx = {name: shared_rx(pattern_sets, name)
           for name in ("request", "correction", "acceptance")}
     for name in ("vague", "concrete_criterion", "reasoning"):
@@ -375,9 +376,30 @@ CEILING = 95.0     # above this, a rate needs a baseline before it can mean anyt
 LIFT_FLOOR = 3.0   # below this much separation from the baseline, the axis is not discriminating
 
 
+# Wording is data, not code: whoever is being read should be read in their own language, and the
+# first pattern file that carries `axis_text` decides which that is. AXES keeps the type mapping
+# and the English defaults, so a pattern file without the block still works.
+_AXIS_TEXT = {}
+
+
+def use_axis_text(pattern_sets):
+    """Adopt the axis wording of the first pattern file that supplies it."""
+    _AXIS_TEXT.clear()
+    for ps in pattern_sets or []:
+        for aid, row in (ps.get("axis_text") or {}).items():
+            if aid in AXES and aid not in _AXIS_TEXT and isinstance(row, list) and len(row) == 4:
+                _AXIS_TEXT[aid] = tuple(row)
+    return _AXIS_TEXT
+
+
+def axis_words(axis_id):
+    """(label, unit, detail, against) in the reader's language, falling back to the default."""
+    return _AXIS_TEXT.get(axis_id) or AXES[axis_id][1:]
+
+
 def axis_catalogue():
     """[(axis id, type, label, unit, detail)] -- for anything that documents what is counted."""
-    return [(aid, AXES[aid][0]) + AXES[aid][1:4] for aid in AXES]
+    return [(aid, AXES[aid][0]) + axis_words(aid)[:3] for aid in AXES]
 
 
 def axes_of(tid):
@@ -418,7 +440,8 @@ def needed_n(hits, total, base_pct, cap=400):
 
 
 def _axis(axis_id, hits, total, evidence=None, base_hits=0, base_total=0):
-    tid, label, unit, detail, against = AXES[axis_id]
+    tid = AXES[axis_id][0]
+    label, unit, detail, against = axis_words(axis_id)
     pct = round(100.0 * hits / total, 1) if total >= MIN_N else None
     base_pct = round(100.0 * base_hits / base_total, 1) if base_total >= MIN_N else None
     lift = round(pct - base_pct, 1) if (pct is not None and base_pct is not None) else None

@@ -230,8 +230,13 @@ def _answers_template(result):
     return {
         "_howto": "Fill `answer` for every question. Blocking ones gate the verdict. "
                   "Then complete `verdict`: main is required, roles/reads/summary are the reading.",
+        "_portrait": "The one field a reader actually keeps. Two or three sentences describing "
+                     "this person, built from the quotes above and written in their language -- "
+                     "not the type's definition pasted in. Say what they do, in their words, and "
+                     "one thing it costs them. No flattery and no certainty you do not have.",
         "answers": {q["id"]: {"answer": "", "note": ""} for q in result["open_questions"]},
-        "verdict": {"main": "", "roles": {}, "reads": {}, "summary": "", "title": ""},
+        "verdict": {"main": "", "portrait": "", "roles": {}, "reads": {}, "summary": "",
+                    "title": ""},
     }
 
 

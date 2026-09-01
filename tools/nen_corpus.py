@@ -79,10 +79,25 @@ DEFAULTS = {
 PASTE_STRUCTURE_RX = re.compile(r"(^|\n)#{2,}\s|\*\*[^*\n]{1,60}\*\*|(^|\n)\s*\|[^\n]*\|")
 
 
+CONFIG_NAME = "water-divination.json"
+
+
 def load_config(path=None):
-    """Config is optional. Without one, the known stores are auto-discovered."""
+    """Config is optional. Without one, the repo's own config is used if it exists, then the
+    known stores are auto-discovered.
+
+    Picking it up automatically is the difference between a reading in your language and a
+    reading in the default one: the pattern order in the config is what decides which. Before
+    this, omitting `--config` silently fell back to English wording on a Japanese corpus.
+    """
     cfg = dict(DEFAULTS)
     cfg["config_path"] = None
+    if not path:
+        for candidate in (os.path.join(REPO_ROOT, CONFIG_NAME),
+                          os.path.join(os.getcwd(), CONFIG_NAME)):
+            if os.path.isfile(candidate):
+                path = candidate
+                break
     if path:
         with io.open(path, encoding="utf-8") as f:
             user = json.load(f)
@@ -673,6 +688,24 @@ def _self_test():
         _, blind = collect_timeline(cfg3, flag_rx=flags)
         check("a corpus with no agent side says so instead of reporting zero effect",
               blind == ["jsonl"], str(blind))
+
+        # Omitting --config used to fall back to the defaults in silence, which meant an English
+        # reading on a Japanese corpus, because the pattern order is what picks the language.
+        here, saved_root = os.getcwd(), REPO_ROOT
+        try:
+            globals()["REPO_ROOT"] = os.path.join(tmp, "no-config-here")
+            os.chdir(tmp)
+            with io.open(os.path.join(tmp, CONFIG_NAME), "w", encoding="utf-8") as f:
+                f.write('{"patterns": ["patterns/ja.json"], "short_chars": 7}')
+            picked = load_config()
+            check("a config sitting beside you is picked up without being named",
+                  picked["short_chars"] == 7 and picked["config_path"] is not None,
+                  str(picked.get("config_path")))
+            check("naming one still wins over the one lying around",
+                  load_config(os.path.join(tmp, CONFIG_NAME))["short_chars"] == 7)
+        finally:
+            os.chdir(here)
+            globals()["REPO_ROOT"] = saved_root
 
     print("\n%s" % ("ALL PASS" if ok else "FAILURES ABOVE"))
     return 0 if ok else 1
