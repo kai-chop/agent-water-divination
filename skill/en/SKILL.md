@@ -28,7 +28,13 @@ that was empty from a store that was never there. Fewer than ~50 of the operator
 is too thin to judge — say so and widen the window rather than producing a confident reading of
 almost nothing.
 
-### 2. Interview — this is the part that is actually the divination
+### 2. Interview — after the reading, and kept short
+
+**The reading comes first.** `measure` names what it looks like, then lists what would settle it.
+Piling questions in front of an answer turns a divination into paperwork, and nobody comes back
+to paperwork. Questions of the same shape are already folded into one by the tool, with the cases
+listed under `items` — **do not unfold them**, and leave the optional ones alone unless the
+operator asks.
 
 The tool lists what a regex could not settle. Ask them **in conversation, one at a time**, in the
 operator's own language. Three kinds:

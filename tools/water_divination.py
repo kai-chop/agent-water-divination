@@ -112,8 +112,6 @@ def run_measure(args):
 
     blocking = [q for q in result["open_questions"] if q["blocking"]]
     print("\n%d message(s) of yours across %d session(s)." % (result["own"], result["sessions"]))
-    print("Provisional order (regex hits, NOT a verdict): "
-          + ", ".join("%s %d" % (p["label_en"], p["hits"]) for p in result["provisional"]))
 
     eff = result["effects"]
     label_of = {t["id"]: t["label_en"] for t in result["types"]}
@@ -164,12 +162,23 @@ def run_measure(args):
         print("  no agent side in: %s (nothing measurable there)"
               % ", ".join(eff["blind_sources"]))
 
-    print("\n--- ask these before a verdict (%d blocking, %d total) ---"
-          % (len(blocking), len(result["open_questions"])))
-    for q in result["open_questions"]:
-        print("\n[%s]%s %s" % (q["kind"], " BLOCKING" if q["blocking"] else "", q["id"]))
+    # The reading comes first and it comes with a name. The questions are what would settle it,
+    # not homework standing between you and an answer.
+    if showed:
+        lead = showed[0]
+        print("\n--- it looks like %s ---" % label_of.get(lead["type"], lead["type"]))
+        print("  %s, %s%% against %s%% — the widest separation in this window."
+              % (lead["label"], lead["pct"], lead["base_pct"]))
+        print("  Not settled yet: %d thing(s) below would confirm or move it." % len(blocking))
+
+    print("\n--- what would settle it (%d, plus %d optional) ---"
+          % (len(blocking), len(result["open_questions"]) - len(blocking)))
+    for q in sorted(result["open_questions"], key=lambda x: not x["blocking"]):
+        print("\n[%s]%s %s" % (q["kind"], "" if q["blocking"] else " optional", q["id"]))
         print("  why : %s" % q["why"])
         print("  ask : %s" % q["ask"])
+        for it in (q.get("items") or [])[:8]:
+            print("      - %s  %s" % (it.get("ts", ""), (it.get("text") or "")[:78]))
         if q.get("observe"):
             print("  watch: %s" % q["observe"])
         print("  answer: %s" % q["answer_format"])
@@ -212,21 +221,37 @@ def _answers_template(result):
 # ---------------------------------------------------------------- verdict
 
 def revoke_disowned(result, answers):
-    """A quote its author disowns stops being evidence. Returns the list of revocations."""
+    """A quote its author disowns stops being evidence. Returns the list of revocations.
+
+    The authorship question is asked once for all the quotes at once, so the answer names which
+    ones are not yours: "all mine" revokes nothing, anything else is matched against the quotes
+    by timestamp or by text.
+    """
     revoked = []
     for q in result["open_questions"]:
-        ref = q.get("quote_ref")
         a = answers.get(q["id"]) or {}
-        if not ref or str(a.get("answer", "")).strip().lower() not in ("no", "n", "false"):
+        said = (str(a.get("answer", "")) + " " + str(a.get("note", ""))).strip()
+        refs = q.get("quote_refs") or ([q["quote_ref"]] if q.get("quote_ref") else [])
+        if not refs or not said:
             continue
-        for t in result["types"]:
-            if t["id"] != ref["type"]:
-                continue
-            for name, quotes in (t["quotes"] or {}).items():
-                keep = [x for x in quotes if x["ts"] != ref["ts"]]
-                if len(keep) != len(quotes):
-                    revoked.append({"type": t["id"], "signal": name, "ts": ref["ts"]})
-                t["quotes"][name] = keep
+        if said.strip().lower() in ("all mine", "yes", "mine", "all"):
+            continue
+        disowned = [r for r in refs
+                    if r["ts"] in said
+                    or any(r["ts"] == it["ts"] and it["text"][:24] in said
+                           for it in (q.get("items") or []))]
+        # a bare "no" on a single-quote question still means that one
+        if not disowned and said.strip().lower() in ("no", "n", "false") and len(refs) == 1:
+            disowned = refs
+        for ref in disowned:
+            for t in result["types"]:
+                if t["id"] != ref["type"]:
+                    continue
+                for name, quotes in (t["quotes"] or {}).items():
+                    keep = [x for x in quotes if x["ts"] != ref["ts"]]
+                    if len(keep) != len(quotes):
+                        revoked.append({"type": t["id"], "signal": name, "ts": ref["ts"]})
+                    t["quotes"][name] = keep
     return revoked
 
 
@@ -279,10 +304,12 @@ def run_verdict(args):
             print("  - %s / %s @ %s" % (r["type"], r["signal"], r["ts"]))
 
     if refusals:
-        print("\nNO VERDICT. The reading stays provisional because:")
+        # A refusal is one step short of a name, not a rejection. Saying it the other way makes
+        # the tool feel like an auditor, and nobody comes back to an auditor.
+        print("\nOne step short of a name:")
         for r in refusals:
             print("  - %s" % r)
-        print("\nAnswer those, then run this again. (exit 3)")
+        print("\nSettle that and run this again. (exit 3)")
         return 3
 
     verdict["confirmed"] = True

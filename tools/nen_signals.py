@@ -695,6 +695,8 @@ def _misread_halves(events):
 def open_questions(result, pattern_sets, cfg):
     """What a regex cannot settle, written as questions. `blocking` gates the verdict."""
     qs = []
+    authorship = []
+    attribution = []
     probes = {}
     observe = {}
     for ps in pattern_sets:
@@ -730,20 +732,10 @@ def open_questions(result, pattern_sets, cfg):
             for a in (result.get("effects", {}).get("axes") or {}).values() if a["type"] == tid))
         for q in (quotes if in_the_reading else []):
             if q["paste"] or q["chars"] >= cfg["paste_min_chars"]:
-                qs.append({
-                    "id": "auth_%s_%s" % (tid, q["ts"].replace(":", "").replace("-", "")),
-                    "kind": "authorship",
-                    "type": tid,
-                    "why": "Long enough to have been pasted from somewhere else (%d chars%s)."
-                           % (q["chars"], ", flagged " + q["paste"] if q["paste"] else ""),
-                    "ask": "Did you write this yourself? — %s" % q["text"][:120],
-                    "observe": "",
-                    "answer_format": "yes | no",
-                    "blocking": True,
-                    # answering "no" revokes this quote in water_divination.py -- the question
-                    # has to be able to point at what it disqualifies
-                    "quote_ref": {"type": tid, "ts": q["ts"]},
-                })
+                # collected, not asked one by one: eight near-identical questions in a row is
+                # how a reading turns into paperwork
+                authorship.append({"type": tid, "ts": q["ts"], "chars": q["chars"],
+                                   "paste": q["paste"], "text": q["text"][:160]})
 
         showed_here = any(a["showed"] for a in (result.get("effects", {}).get("axes") or {}).values()
                           if a["type"] == tid)
@@ -773,9 +765,8 @@ def open_questions(result, pattern_sets, cfg):
         tid = ax["type"]
         t = next((x for x in result["types"] if x["id"] == tid), None)
         label = (t or {}).get("label_en") or tid
-        qs.append({
-            "id": "attr_%s" % aid,
-            "kind": "attribution",
+        attribution.append({
+            "axis": aid,
             "type": tid,
             "why": "%s: %d of %d %s (%s%%), %s%s. %s"
                    % (label, ax["hits"], ax["n"], ax["unit"], ax["pct"],
@@ -787,11 +778,41 @@ def open_questions(result, pattern_sets, cfg):
                       "may be the population rather than you" % ax["lift"]
                       if ax["undiscriminating"] and ax["lift"] is not None else "",
                       ax["detail"]),
-            "ask": "Were those %s the same kind of work as the rest — or the ones you already "
-                   "understood well?" % ax["unit"],
+            "text": "%s — %s (%s%% of %d %s)" % (label, ax["label"], ax["pct"], ax["n"],
+                                                 ax["unit"]),
+        })
+
+    if attribution:
+        qs.append({
+            "id": "attribution",
+            "kind": "attribution",
+            "type": None,
+            "why": "Each of these separated from its own comparison population. That is a "
+                   "correlation until the two sides are known to be the same kind of work.",
+            "ask": "Across these, were the cases counted the same kind of work as the rest — "
+                   "or the ones you already understood well?",
             "observe": "A number that only holds on easy work is not an aptitude.",
-            "answer_format": "same kind | the easier ones | the harder ones",
+            "answer_format": "same kind | the easier ones | the harder ones "
+                             "(name an axis if it differs)",
             "blocking": True,
+            "items": attribution,
+        })
+
+    if authorship:
+        qs.append({
+            "id": "authorship",
+            "kind": "authorship",
+            "type": None,
+            "why": "%d quote(s) behind this reading are long enough to have been pasted from "
+                   "somewhere else. One answer settles all of them." % len(authorship),
+            "ask": "Which of these are your own words? Anything you say is not yours is dropped "
+                   "from the evidence.",
+            "observe": "",
+            "answer_format": "all mine | list the ones that are not",
+            "blocking": True,
+            "items": authorship,
+            # answering with a list revokes those quotes in water_divination.py
+            "quote_refs": [{"type": a["type"], "ts": a["ts"]} for a in authorship],
         })
 
     res = (result.get("effects") or {}).get("residual") or {}
