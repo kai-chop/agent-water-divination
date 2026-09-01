@@ -88,12 +88,11 @@ def run_measure(args):
 
     # the effect layer: what the agent did after you spoke. Needs the turns the signal layer
     # throws away, so it is a second pass over the same stores.
-    flag_rx = {name: signals._alt(pats, lambda ps, n=name: ps.get("effects", {}).get(n))
-               for name in ("misread", "question", "verify")}
-    flag_rx["question"] = signals._alt(
-        pats, lambda ps: ps.get("effects", {}).get("agent_question"))
-    flag_rx["verify"] = signals._alt(
-        pats, lambda ps: ps.get("effects", {}).get("verification"))
+    # flag name -> the key it is written under in patterns/*.json
+    flag_keys = {"misread": "misread", "verify": "verification", "question": "agent_question",
+                 "assumption": "agent_assumption", "options": "agent_options"}
+    flag_rx = {name: signals._alt(pats, lambda ps, k=key: ps.get("effects", {}).get(k))
+               for name, key in flag_keys.items()}
     mech_rx = signals._alt(pats, lambda ps: ps.get("effects", {}).get("mechanism_path"))
     tl, blind = corpus.collect_timeline(cfg, since, until, flag_rx, mech_rx, attrib)
     result["effects"] = signals.measure_effects(tl, pats, cfg, blind)
@@ -124,10 +123,20 @@ def run_measure(args):
         if not ax:
             continue
         if not ax["enough"]:
-            print("  %-12s %-42s  only %d %s" % (t["label_en"], ax["label"], ax["n"], ax["unit"]))
+            # the comparison side still carries the diagnosis: it says whether the outcome
+            # varies at all, which is what tells a thin axis from a pointless one
+            base = ("  (the %s ran %s%%)" % (ax["against"], ax["base_pct"])
+                    if ax["base_pct"] is not None else "")
+            print("  %-12s %-40s  only %d %s%s"
+                  % (t["label_en"], ax["label"], ax["n"], ax["unit"], base))
             continue
-        print("  %-12s %-42s  %5s%%  (%d/%d %s)"
-              % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], ax["unit"]))
+        base = ("vs %5s%% (%d %s)" % (ax["base_pct"], ax["base_n"], ax["against"])
+                if ax["base_pct"] is not None else "no baseline (%s: %d)"
+                % (ax["against"], ax["base_n"]))
+        lift = "  %+.1f pts" % ax["lift"] if ax["lift"] is not None else ""
+        print("  %-12s %-40s %5s%% (%d/%d)  %s%s%s"
+              % (t["label_en"], ax["label"], ax["pct"], ax["hits"], ax["n"], base, lift,
+                 "  <- says nothing" if ax["undiscriminating"] else ""))
 
     res = eff["residual"]
     print("\n  Specialist — what the five do not explain")

@@ -354,7 +354,10 @@ def _agent_flags(text, flags):
     return {name: bool(rx and text and rx.search(text)) for name, rx in flags.items()}
 
 
-AGENT_FLAGS = ("misread", "question", "verify")
+# `question` is the agent asking outright. `assumption` and `options` are the quieter forms of the
+# same thing -- the agent filling a gap you left, or handing the choice back. Asking outright is
+# rare enough that a rate built on it alone sits at the ceiling and discriminates nothing.
+AGENT_FLAGS = ("misread", "question", "verify", "assumption", "options")
 
 
 def _event(ts, session, kind, text="", tool="", mechanism=False, flags=None):

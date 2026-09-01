@@ -277,6 +277,9 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
                             .get("signals", {}).get("constraint"))
     rx["rulemaking"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
                             .get("signals", {}).get("rulemaking"))
+    rx["finished_image"] = _alt(pattern_sets,
+                                lambda ps: (ps.get("types", {}).get("houshutsu") or {})
+                                .get("signals", {}).get("finished_image"))
     if rx["correction"] is None:
         rx["correction"] = _alt(pattern_sets, lambda ps: (ps.get("types", {}).get("sousa") or {})
                                 .get("signals", {}).get("correction"))
@@ -287,7 +290,7 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
 
     axes = {
         "kyouka": _axis_constraint_survival(by_session, rx),
-        "houshutsu": _axis_started_without_asking(by_session, rx),
+        "houshutsu": _axis_agent_did_not_fill_in(by_session, rx),
         "henka": _axis_vague_to_criterion(by_session, rx),
         "gugenka": _axis_finish_line_verified(by_session, rx),
         "sousa": _axis_rules_that_stuck(by_session, rx),
@@ -326,77 +329,101 @@ def measure_effects(events, pattern_sets, cfg, blind_sources=()):
 
 
 # One place the axes are described, so the diagram generator and the report cannot drift from
-# what the code actually counts.
+# what the code actually counts. `against` names the comparison population -- every axis has a
+# denominator that is a subset of something, and the same outcome measured over the rest of that
+# something is the only way to tell "you are good at this" from "this number is always high".
 AXES = {
     "kyouka": ("sessions that held their constraint", "sessions",
-               "A constraint you stated, and no correction in the rest of that session."),
-    "houshutsu": ("requests the agent could act on directly", "requests",
-                  "No clarifying question from the agent before it started."),
+               "A constraint you stated, and no correction in the rest of that session.",
+               "sessions where you stated no constraint"),
+    "houshutsu": ("requests the agent did not have to fill in", "requests",
+                  "No question back, no stated assumption, no menu of options -- the picture "
+                  "arrived complete enough to act on.",
+                  "requests carrying no finished-picture wording"),
     "henka": ("fuzzy starts that became checkable", "vague openings",
               "'Something is off' followed, in the same session, by a criterion someone else "
-              "could apply."),
+              "could apply.",
+              "sessions that never started fuzzy"),
     "gugenka": ("finish lines the agent actually checked against", "requests with a finish line",
                 "You said what done means, and the agent came back with evidence rather than "
-                "a claim."),
+                "a claim.",
+                "requests with no finish line"),
     "sousa": ("rules that became machinery", "rules declared",
-              "Followed, in the same session, by a write into a rule file, hook or config."),
+              "Followed, in the same session, by a write into a rule file, hook or config.",
+              "your other requests"),
 }
+
+CEILING = 95.0     # above this, a rate needs a baseline before it can mean anything
+LIFT_FLOOR = 3.0   # below this much separation from the baseline, the axis is not discriminating
 
 
 def axis_catalogue():
     """[(type id, label, unit, detail)] -- what each axis counts, for anything that documents it."""
-    return [(tid,) + AXES[tid] for tid in AXES]
+    return [(tid,) + AXES[tid][:3] for tid in AXES]
 
 
-def _axis(tid, hits, total, evidence=None):
-    label, unit, detail = AXES[tid]
-    return {"label": label, "unit": unit, "n": total, "hits": hits,
-            "pct": round(100.0 * hits / total, 1) if total >= MIN_N else None,
+def _axis(tid, hits, total, evidence=None, base_hits=0, base_total=0):
+    label, unit, detail, against = AXES[tid]
+    pct = round(100.0 * hits / total, 1) if total >= MIN_N else None
+    base_pct = round(100.0 * base_hits / base_total, 1) if base_total >= MIN_N else None
+    lift = round(pct - base_pct, 1) if (pct is not None and base_pct is not None) else None
+    # A number at the ceiling says nothing on its own: it may be you, or it may be that the
+    # outcome almost always happens. Either the baseline separates them, or the axis is flagged.
+    undiscriminating = (pct is not None
+                        and (base_pct is None and pct >= CEILING
+                             or lift is not None and abs(lift) < LIFT_FLOOR))
+    return {"label": label, "unit": unit, "n": total, "hits": hits, "pct": pct,
             "enough": total >= MIN_N, "detail": detail,
+            "against": against, "base_n": base_total, "base_pct": base_pct, "lift": lift,
+            "undiscriminating": undiscriminating,
             "evidence": evidence or []}
 
 
 def _users(evs):
     """Indices of messages that are yours. Pasted text is skipped here for the same reason the
     signal layer skips it: an effect credited to someone else's words is credited to the wrong
-    person, and the rare-event catalogue is where that mistake would be loudest."""
+    person, and the residual is where that mistake would be loudest."""
     return [i for i, e in enumerate(evs) if e["kind"] == "user" and not e.get("paste")]
 
 
 def _axis_constraint_survival(by_session, rx):
-    """Enhancer: you named a constraint early; did the session then run without a correction?
+    """Enhancer: you named a constraint; did the session then run without a correction?
 
-    Denominator is sessions, not messages -- holding a constraint is a property of a stretch of
-    work, and nothing else here is measured per session."""
-    total = clean = 0
+    Against: the sessions where you named none. Denominator is sessions, not messages -- holding
+    a constraint is a property of a stretch of work."""
+    hits = total = base_hits = base_total = 0
     ev = []
     for evs in by_session.values():
         idx = _users(evs)
         if len(idx) < 3:
             continue
-        # The constraint has to be stated with enough of the session left for holding it to mean
-        # anything, but requiring the *first third* threw away most sessions -- constraints often
-        # arrive once the work has started. Anything before the final third counts, and what is
-        # measured is the stretch after it.
         cutoff = len(idx) - max(1, len(idx) // 3)
         stated = next((p for p in range(cutoff)
                        if rx["constraint"] and rx["constraint"].search(evs[idx[p]]["text"])), None)
+        start = stated + 1 if stated is not None else 1
+        clean = not any(rx["correction"] and rx["correction"].search(evs[i]["text"])
+                        for i in idx[start:])
         if stated is None:
-            continue
-        total += 1
-        rest = idx[stated + 1:]
-        if not any(rx["correction"] and rx["correction"].search(evs[i]["text"]) for i in rest):
-            clean += 1
-            if len(ev) < 3:
-                ev.append(quote(evs[idx[stated]], 160))
-    return _axis("kyouka", clean, total, ev)
+            base_total += 1
+            base_hits += 1 if clean else 0
+        else:
+            total += 1
+            if clean:
+                hits += 1
+                if len(ev) < 3:
+                    ev.append(quote(evs[idx[stated]], 160))
+    return _axis("kyouka", hits, total, ev, base_hits, base_total)
 
 
-def _axis_started_without_asking(by_session, rx):
-    """Emitter: after your request, did the agent get to work, or ask you what you meant?
+def _axis_agent_did_not_fill_in(by_session, rx):
+    """Emitter: after your request, did the agent have to fill anything in?
 
-    A clarifying question is the agent telling you the finished picture did not arrive."""
-    total = started = 0
+    Filling in is three things, not one: asking you outright, stating an assumption, or handing
+    back a menu of options. Counting only the first put this axis at 97% and it discriminated
+    nothing -- agents almost never ask outright.
+
+    Against: your requests that carried no finished-picture wording."""
+    hits = total = base_hits = base_total = 0
     ev = []
     for evs in by_session.values():
         idx = _users(evs)
@@ -405,75 +432,103 @@ def _axis_started_without_asking(by_session, rx):
                 continue
             nxt = idx[pos + 1] if pos + 1 < len(idx) else len(evs)
             span = evs[i + 1:nxt]
-            total += 1
-            if not any(e["kind"] == "assistant" and e["question"] for e in span):
-                started += 1
-            elif len(ev) < 3:
-                ev.append(quote(evs[i], 160))
-    return _axis("houshutsu", started, total, ev)
+            clean = not any(e["kind"] == "assistant"
+                            and (e["question"] or e["assumption"] or e["options"])
+                            for e in span)
+            if rx["finished_image"] and rx["finished_image"].search(evs[i]["text"]):
+                total += 1
+                if clean:
+                    hits += 1
+                    if len(ev) < 3:
+                        ev.append(quote(evs[i], 160))
+            else:
+                base_total += 1
+                base_hits += 1 if clean else 0
+    return _axis("houshutsu", hits, total, ev, base_hits, base_total)
 
 
 def _axis_vague_to_criterion(by_session, rx):
     """Transmuter: a topic that began as a feeling -- did you turn it into something checkable?
 
-    Denominator is stretches that started vague, so it cannot be raised by never being vague."""
-    total = converted = 0
+    Against: sessions that never started fuzzy, where a criterion appeared anyway."""
+    hits = total = base_hits = base_total = 0
     ev = []
     for evs in by_session.values():
         idx = _users(evs)
-        for pos, i in enumerate(idx):
-            if not (rx["vague"] and rx["vague"].search(evs[i]["text"])):
-                continue
-            total += 1
-            later = [evs[j]["text"] for j in idx[pos + 1:]]
-            if any(rx["concrete_criterion"] and rx["concrete_criterion"].search(t)
-                   for t in later):
-                converted += 1
-                if len(ev) < 3:
-                    ev.append(quote(evs[i], 160))
-    return _axis("henka", converted, total, ev)
+        vague_at = [p for p, i in enumerate(idx)
+                    if rx["vague"] and rx["vague"].search(evs[i]["text"])]
+
+        def criterion_after(p):
+            return any(rx["concrete_criterion"] and rx["concrete_criterion"].search(evs[j]["text"])
+                       for j in idx[p + 1:])
+
+        if vague_at:
+            for p in vague_at:
+                total += 1
+                if criterion_after(p):
+                    hits += 1
+                    if len(ev) < 3:
+                        ev.append(quote(evs[idx[p]], 160))
+        elif len(idx) >= 2:
+            base_total += 1
+            base_hits += 1 if criterion_after(0) else 0
+    return _axis("henka", hits, total, ev, base_hits, base_total)
 
 
 def _axis_finish_line_verified(by_session, rx):
     """Conjurer: you wrote what done looks like -- did the agent then show it had checked?
 
-    This tests the prescription this whole tool argues for, against the tool's own corpus."""
-    total = verified = 0
+    Against: your requests with no finish line, where the agent verified anyway. This is the
+    axis that tests the prescription this whole tool argues for, against its own corpus."""
+    hits = total = base_hits = base_total = 0
     ev = []
     for evs in by_session.values():
         idx = _users(evs)
         for pos, i in enumerate(idx):
             t = evs[i]["text"]
-            if not (rx["request"] and rx["request"].search(t)
-                    and rx["acceptance"] and rx["acceptance"].search(t)):
+            if not (rx["request"] and rx["request"].search(t)):
                 continue
             nxt = idx[pos + 1] if pos + 1 < len(idx) else len(evs)
-            total += 1
-            if any(e["kind"] == "assistant" and e["verify"] for e in evs[i + 1:nxt]):
-                verified += 1
-                if len(ev) < 3:
-                    ev.append(quote(evs[i], 160))
-    return _axis("gugenka", verified, total, ev)
+            verified = any(e["kind"] == "assistant" and e["verify"] for e in evs[i + 1:nxt])
+            if rx["acceptance"] and rx["acceptance"].search(t):
+                total += 1
+                if verified:
+                    hits += 1
+                    if len(ev) < 3:
+                        ev.append(quote(evs[i], 160))
+            else:
+                base_total += 1
+                base_hits += 1 if verified else 0
+    return _axis("gugenka", hits, total, ev, base_hits, base_total)
 
 
 def _axis_rules_that_stuck(by_session, rx):
     """Manipulator: of the rules you declared, how many stopped depending on memory?
 
-    Written into a rule file, hook or config later in the same session. A rule that lives only
-    in the transcript has to be said again next time, which is the thing steering is supposed
-    to end."""
-    total = mechanised = 0
+    Against: your other requests, which also sometimes end in a rule file being touched. A rule
+    that lives only in the transcript has to be said again next time."""
+    hits = total = base_hits = base_total = 0
     ev = []
     for evs in by_session.values():
-        for i in _users(evs):
-            if not (rx["rulemaking"] and rx["rulemaking"].search(evs[i]["text"])):
+        idx = _users(evs)
+        for pos, i in enumerate(idx):
+            text = evs[i]["text"]
+            is_rule = rx["rulemaking"] and rx["rulemaking"].search(text)
+            is_req = rx["request"] and rx["request"].search(text)
+            if not (is_rule or is_req):
                 continue
-            total += 1
-            if any(e["kind"] == "tool" and e["mechanism"] for e in evs[i + 1:]):
-                mechanised += 1
-                if len(ev) < 3:
-                    ev.append(quote(evs[i], 160))
-    return _axis("sousa", mechanised, total, ev)
+            nxt = idx[pos + 1] if pos + 1 < len(idx) else len(evs)
+            mech = any(e["kind"] == "tool" and e["mechanism"] for e in evs[i + 1:nxt])
+            if is_rule:
+                total += 1
+                if mech:
+                    hits += 1
+                    if len(ev) < 3:
+                        ev.append(quote(evs[i], 160))
+            else:
+                base_total += 1
+                base_hits += 1 if mech else 0
+    return _axis("sousa", hits, total, ev, base_hits, base_total)
 
 
 # ---------------------------------------------------------------- the residual
@@ -660,8 +715,13 @@ def open_questions(result, pattern_sets, cfg):
             "id": "attr_%s" % tid,
             "kind": "attribution",
             "type": tid,
-            "why": "%s: %d of %d %s (%s%%). %s"
-                   % (label, ax["hits"], ax["n"], ax["unit"], ax["pct"], ax["detail"]),
+            "why": "%s: %d of %d %s (%s%%), against %s%% for %s%s. %s"
+                   % (label, ax["hits"], ax["n"], ax["unit"], ax["pct"],
+                      ax["base_pct"], ax["against"],
+                      " — a separation of %+.1f points, which is small enough that the number "
+                      "may be the population rather than you" % ax["lift"]
+                      if ax["undiscriminating"] and ax["lift"] is not None else "",
+                      ax["detail"]),
             "ask": "Were those %s the same kind of work as the rest — or the ones you already "
                    "understood well?" % ax["unit"],
             "observe": "A number that only holds on easy work is not an aptitude.",
@@ -845,9 +905,10 @@ def _self_test():
 
     # -- the effect layer: six axes that have to be able to disagree with each other -------
     def ev(kind, text="", **kw):
+        # built from corpus.AGENT_FLAGS so a new agent-side flag cannot be forgotten here
         e = {"ts": "2026-08-01T10:00", "session": kw.pop("s", "e1"), "kind": kind,
-             "text": text, "tool": "", "mechanism": False,
-             "misread": False, "question": False, "verify": False, "paste": None}
+             "text": text, "tool": "", "mechanism": False, "paste": None}
+        e.update({name: False for name in corpus.AGENT_FLAGS})
         e.update(kw)
         return e
 
@@ -875,16 +936,55 @@ def _self_test():
     ax = eff["axes"]
     check("Enhancer axis counts sessions, not messages",
           ax["kyouka"]["n"] == 2 and ax["kyouka"]["hits"] == 1, str(ax["kyouka"]))
-    # every "please ..." in the fixture is a request, across all four sessions; exactly one of
-    # them is followed by the agent asking what was meant
-    check("Emitter axis counts requests the agent did not have to ask about",
-          ax["houshutsu"]["n"] == 6 and ax["houshutsu"]["hits"] == 5, str(ax["houshutsu"]))
+    # None of these requests state a finished picture, so they are all the comparison side --
+    # which is the point of the axis: it rates the requests where you did paint one.
+    check("Emitter axis puts requests with no finished picture on the comparison side",
+          ax["houshutsu"]["n"] == 0 and ax["houshutsu"]["base_n"] == 6
+          and ax["houshutsu"]["base_pct"] == 83.3, str(ax["houshutsu"]))
     check("Conjurer axis counts only requests that carried a finish line",
           ax["gugenka"]["n"] == 2 and ax["gugenka"]["hits"] == 1, str(ax["gugenka"]))
     check("Manipulator axis counts rules that reached a file",
           ax["sousa"]["n"] == 2 and ax["sousa"]["hits"] == 1, str(ax["sousa"]))
     check("an axis below the minimum reports its count instead of a rate",
           ax["henka"]["enough"] is False and ax["henka"]["pct"] is None, str(ax["henka"]))
+
+    # -- baselines: a rate with nothing to compare against cannot mean anything ------------
+    # Every axis's denominator is a subset of something; the same outcome over the rest of that
+    # something is what separates "you are good at this" from "this number is always high".
+    base_tl = []
+    for i in range(6):      # you state a finish line: the agent verifies every time
+        base_tl += [ev("user", "please fix it %d, done when tests pass" % i, s="b%d" % i),
+                    ev("assistant", verify=True, s="b%d" % i)]
+    for i in range(6):      # you do not: it verifies every time anyway
+        base_tl += [ev("user", "please fix it plainly %d" % i, s="c%d" % i),
+                    ev("assistant", verify=True, s="c%d" % i)]
+    flat = measure_effects(base_tl, pats, cfg)["axes"]["gugenka"]
+    check("an axis carries the same outcome measured over the comparison population",
+          flat["base_n"] == 6 and flat["base_pct"] == 100.0, str(flat))
+    check("a rate no different from its baseline is marked as saying nothing",
+          flat["pct"] == 100.0 and flat["lift"] == 0.0 and flat["undiscriminating"] is True,
+          str(flat))
+
+    lift_tl = list(base_tl[:12])
+    for i in range(6):      # same, but without a finish line it never verifies
+        lift_tl += [ev("user", "please fix it plainly %d" % i, s="d%d" % i),
+                    ev("assistant", s="d%d" % i)]
+    lifted = measure_effects(lift_tl, pats, cfg)["axes"]["gugenka"]
+    check("a rate that separates from its baseline is not marked",
+          lifted["lift"] == 100.0 and lifted["undiscriminating"] is False, str(lifted))
+
+    # -- Emitter's outcome: asking outright is only one of three ways to fill a gap ---------
+    fill_tl = [ev("user", "i want it to end up like a single page, please build it", s="f1"),
+               ev("assistant", assumption=True, s="f1"),
+               ev("user", "i want it to feel finished, please build it", s="f2"),
+               ev("assistant", options=True, s="f2"),
+               ev("user", "i want it done, please build it", s="f3"),
+               ev("assistant", question=True, s="f3"),
+               ev("user", "i want it clean, please build it", s="f4"),
+               ev("assistant", s="f4")]
+    em = measure_effects(fill_tl, pats, cfg)["axes"]["houshutsu"]
+    check("a stated assumption or a menu of options counts as filling in, like a question does",
+          em["n"] == 4 and em["hits"] == 1, str(em))
     check("the axes disagree with each other, which one shared outcome could not",
           len({ax[k]["hits"] for k in ("kyouka", "houshutsu", "gugenka", "sousa")}) > 1)
 

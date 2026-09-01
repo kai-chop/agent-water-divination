@@ -70,14 +70,28 @@ Counting your vocabulary tells you that you *exercised* an aptitude, never that 
 each type carries a second number: what happened next, on the agent's side. Each one has its own
 outcome, its own denominator and its own unit, so they can move independently.
 
-| Type | Its own axis | Denominator |
-|---|---|---|
-| Enhancer | sessions that held their constraint to the end without a correction | sessions |
-| Emitter | requests the agent could act on, instead of asking what you meant | requests |
-| Transmuter | fuzzy starts that turned into something checkable | vague openings |
-| Conjurer | finish lines the agent actually came back with evidence against | requests with a finish line |
-| Manipulator | rules that reached a rule file, hook or config | rules declared |
-| Specialist | not a rate — see below | — |
+| Type | Its own axis | Denominator | Compared against |
+|---|---|---|---|
+| Enhancer | sessions that held their constraint to the end without a correction | sessions | sessions where you stated none |
+| Emitter | requests the agent did not have to fill in | requests painting a finished picture | requests that painted none |
+| Transmuter | fuzzy starts that turned into something checkable | vague openings | sessions that never started fuzzy |
+| Conjurer | finish lines the agent actually came back with evidence against | requests with a finish line | requests without one |
+| Manipulator | rules that reached a rule file, hook or config | rules declared | your other requests |
+| Specialist | not a rate — see below | — | — |
+
+**Every axis is reported against a comparison population, and that is not decoration.** On the
+corpus this was built against, Enhancer read 95.0% — which looks like a strength until the
+comparison lands: sessions where no constraint was stated ran clean 90.2% of the time anyway. The
+real separation is +4.8 points. Meanwhile Manipulator's 66.7% sits against 46.3% (+20.4) and
+Conjurer's 75.0% against 57.2% (+17.8). Without the comparison column the reading would have
+promoted the flattest axis and buried the two that actually move. Any axis within 3 points of its
+baseline is printed as **saying nothing**.
+
+The Emitter axis is the other half of the same lesson. It used to count "the agent did not ask a
+clarifying question" and read 97.0% — because agents almost never ask outright. Asking is only one
+of three ways an agent fills a gap you left; the other two are **stating an assumption** and
+**handing back a menu of options**, and those are common. Counting all three drops the ceiling far
+enough for the number to vary.
 
 ![Each aptitude measured against its own outcome, with its own denominator and its own unit](assets/six-axes.svg)
 

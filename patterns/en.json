@@ -72,6 +72,8 @@
     "misread": "\\b(misread|misunderstood|i had it backwards|i was wrong about|read that wrong|got that wrong|i assumed .{0,30} but)\\b",
     "mechanism_path": "(hooks?[/\\\\]|rules?[/\\\\]|AGENTS\\.md|CLAUDE\\.md|SKILL\\.md|\\.cursorrules|settings\\.json|config\\.(json|ya?ml|toml))",
     "agent_question": "\\b(which (one|of these)|do you want me to|should i|would you like me to|before i (start|proceed)|to confirm|just to check|did you mean)\\b",
+    "agent_assumption": "\\b(i('ll| will)? assum(e|ed|ing)|assuming (that|you)|i took (it|that) to mean|on the assumption|i read (that|this) as|interpreting (it|this) as|if i understand)\\b",
+    "agent_options": "\\b(option [ab1-9]|two options|three options|either .{0,25} or |approach [ab1-9]|plan [ab] |a\\) .{0,40}b\\)|here are (two|three|a few) (ways|options|approaches))\\b",
     "verification": "\\b(exit 0|exit code 0|tests? pass(ed)?|all pass|\\d+/\\d+ pass|verified|i ran it|the output was|reproduced)\\b"
   },
   "_axes": "The operator's own vocabulary that each independent axis needs. Kept apart from `types` because these are read to detect a transition inside a session, not to score a message.",

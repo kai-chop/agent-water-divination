@@ -267,6 +267,15 @@ def render(data):
             else:
                 out.append("<p class='axis-n thin'>only %d %s &nbsp;<span>too few to rate</span></p>"
                            % (ax["n"], E(ax["unit"])))
+            if ax.get("base_pct") is not None:
+                lift = ("%+.1f pts" % ax["lift"]) if ax.get("lift") is not None else "—"
+                out.append("<p class='why'>against <b>%s%%</b> for %s (%d) &nbsp;·&nbsp; %s%s</p>"
+                           % (ax["base_pct"], E(ax["against"]), ax["base_n"], lift,
+                              " &nbsp;<b>— too close to the baseline to mean anything</b>"
+                              if ax.get("undiscriminating") else ""))
+            elif ax.get("base_n") is not None:
+                out.append("<p class='why'>no baseline: only %d %s to compare against</p>"
+                           % (ax["base_n"], E(ax["against"])))
             out.append("<p class='why'>%s — %s</p>" % (E(ax["label"]), E(ax["detail"])))
             out.append("</div>")
         if reads.get(t["id"]):
@@ -411,8 +420,11 @@ def _self_test():
              "quotes": {"rulemaking": [{"ts": "2026-08-03T10:00", "session": "s",
                                         "source": "fixture", "chars": 30, "paste": None,
                                         "text": "from now on <b>always</b> & forever"}]}},
+            {"id": "kyouka", "label": "強化系", "label_en": "Enhancer", "gloss": "holding",
+             "reaction": "the water rises",
+             "signals": {"constraint": {"n": 26, "denom": 40, "pct": 65.0}}, "quotes": {}},
             {"id": "tokushitsu", "label": "特質系", "label_en": "Specialist", "gloss": "combo",
-             "reaction": "something else", "signals": None, "quotes": {},
+             "reaction": "the leaf withers", "signals": None, "quotes": {},
              "reason": "no detector by design"},
         ],
         "borrowed": {
@@ -430,7 +442,15 @@ def _self_test():
             "axes": {"sousa": {"label": "rules that became machinery", "unit": "rules declared",
                                "n": 12, "hits": 10, "pct": 83.3, "enough": True,
                                "detail": "Followed by a write into a rule file.",
-                               "evidence": []}},
+                               "against": "your other requests", "base_n": 200,
+                               "base_pct": 46.3, "lift": 37.0, "undiscriminating": False,
+                               "evidence": []},
+                     "kyouka": {"label": "sessions that held their constraint", "unit": "sessions",
+                                "n": 20, "hits": 19, "pct": 95.0, "enough": True,
+                                "detail": "No correction after it.",
+                                "against": "sessions where you stated no constraint",
+                                "base_n": 51, "base_pct": 93.0, "lift": 2.0,
+                                "undiscriminating": True, "evidence": []}},
             "residual": {"messages_examined": 40, "explained_by_the_five": 30,
                          "explained_pct": 75.0, "residual_that_did_something": 4,
                          "candidates": [{"ts": "2026-08-09T10:00",
@@ -461,6 +481,10 @@ def _self_test():
           "HUNTER" in prov and "Togashi" in prov)
     check("each type carries its own effect axis, not a shared one",
           "DID IT WORK" in prov and "rules that became machinery" in prov)
+    check("an axis is shown against its comparison population",
+          "46.3%" in prov and "your other requests" in prov and "+37.0 pts" in prov)
+    check("a rate too close to its baseline is called out on the page",
+          "too close to the baseline to mean anything" in prov)
     check("the residual is shown with what the agent did about it",
           "work the unspecified parts out from &lt;what&gt; I already said" in prov
           and "left a mechanism" in prov)
