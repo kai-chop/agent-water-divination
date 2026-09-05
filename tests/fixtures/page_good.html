@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sample reading — every quote verifiable</title>
+<!-- A reading page in the shape verify_quotes.py checks: each blockquote is a verbatim
+     substring of a `display` field in history_sample.jsonl. The second one carries inline
+     markup inside the quote, because a real page does and the verifier has to see through it. -->
+<h1>六つのコップ</h1>
+
+<h2>具現化系 — 立った</h2>
+<p>いいですか。よく聞いてください。最初の一言に、もう完成条件が入っています。</p>
+<blockquote><p>I want a small tool that turns a folder of notes into one page. The goal is that it must not rewrite the original files.</p></blockquote>
+
+<h2>変化系 — 立った</h2>
+<p>感覚を、他人がそのまま判定できる観察項目へ置き換えています。</p>
+<blockquote><p>Think of it as a <em>funnel</em>, the way a mail client does it. The criterion is that a reader can tell which notes were dropped.</p></blockquote>
+
+<h2>奥付</h2>
+<p>quote verification: <code>python tools/verify_quotes.py page.html --history tests/fixtures/history_sample.jsonl</code></p>

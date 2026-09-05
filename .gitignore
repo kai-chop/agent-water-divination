@@ -1,8 +1,10 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 
-# your own config, your own pattern additions, and your own readings: all three contain
-# private paths, private words, and the names of the assistants you work with
-water-divination.json
-patterns/local.json
+# Readings and the corpus behind them: your own words, your own project names, the shape of your
+# own days. Everything the scripts write lands here, and none of it belongs in a repository.
 out/
+
+# Design notes for this repo: private working documents, kept beside the code but never published.
+notes/

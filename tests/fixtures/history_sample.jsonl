@@ -1,0 +1,18 @@
+{"display": "I want a small tool that turns a folder of notes into one page. The goal is that it must not rewrite the original files.", "pastedContents": {}, "timestamp": 1772442000000, "project": "/home/dev/atlas", "sessionId": "a1"}
+{"display": "", "pastedContents": {}, "timestamp": 1772442060000, "project": "/home/dev/atlas", "sessionId": "a1"}
+{"display": "no, keep it as is", "pastedContents": {}, "timestamp": 1772442720000, "project": "/home/dev/atlas", "sessionId": "a1"}
+{"display": "make it a rule: never skip the check", "pastedContents": {}, "timestamp": 1772448000000, "project": "/home/dev/atlas", "sessionId": "a1"}
+{"display": "Think of it as a funnel, the way a mail client does it. The criterion is that a reader can tell which notes were dropped.", "pastedContents": {}, "timestamp": 1772525100000, "project": "/home/dev/atlas", "sessionId": "a2"}
+{"display": "yes", "pastedContents": {}, "timestamp": 1772526600000, "project": "/home/dev/atlas", "sessionId": "a2"}
+{"display": "a line that never closes, "pastedContents": {}}
+{"display": "Write the spec first: the format, the edge cases, and what counts as done when the tests pass.", "pastedContents": {}, "timestamp": "1772622000000", "project": "/home/dev/atlas", "sessionId": "a3"}
+{"display": "does this review change anything?", "pastedContents": {"1": {"id": 1, "type": "text", "contentHash": "0f1e2d3c4b5a6978"}}, "timestamp": 1772623200000, "project": "/home/dev/atlas", "sessionId": "a3"}
+{"display": "Picking this up again. To be clear, the constraint has not changed: it must not touch the originals.", "pastedContents": {}, "timestamp": 1773997200000, "project": "/home/dev/atlas", "sessionId": "a4"}
+{"display": "ok", "pastedContents": {}, "timestamp": 1773999900000, "project": "/home/dev/atlas", "sessionId": "a4"}
+{"display": "I'd like a page that shows the run history. It should feel like a single sheet of paper.", "pastedContents": {}, "timestamp": 1772715600, "project": "C:\\work\\beacon", "sessionId": "b1"}
+{"display": "not that one -- instead of the cache, read the index", "pastedContents": {}, "timestamp": 1772717400, "project": "C:\\work\\beacon", "sessionId": "b1"}
+{"display": "go on", "pastedContents": {}, "timestamp": 1772719200, "project": "C:\\work\\beacon", "sessionId": "b1"}
+{"display": "From now on, add the evidence line to every report.", "pastedContents": {}, "timestamp": 1772787600, "project": "C:\\work\\beacon", "sessionId": "b2"}
+{"display": "fine", "pastedContents": {}, "timestamp": 1772788500, "project": "C:\\work\\beacon", "sessionId": "b2"}
+{"display": "小さな実験だけしたい。まず、何が計測できるかを確かめて。", "pastedContents": {}, "timestamp": 1775833200000, "project": "/home/dev/cinder", "sessionId": "c1"}
+{"display": "ありがとう、ここまでで十分", "pastedContents": {}, "timestamp": 1775834400000, "project": "/home/dev/cinder", "sessionId": "c1"}

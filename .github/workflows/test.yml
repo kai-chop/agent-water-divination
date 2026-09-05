@@ -16,22 +16,33 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
-      - name: nen_corpus self-test
-        run: python tools/nen_corpus.py --self-test
-      - name: nen_signals self-test
-        run: python tools/nen_signals.py --self-test
-      - name: nen_context self-test
-        run: python tools/nen_context.py --self-test
-      - name: nen_report self-test
-        run: python tools/nen_report.py --self-test
-      - name: water_divination self-test
-        run: python tools/water_divination.py --self-test
-      - name: nen_assets self-test
-        run: python tools/nen_assets.py --self-test
-      - name: committed assets match the pattern files
+      # the three things that ship, each proving its own behaviour
+      - name: mizumi_corpus self-test
+        run: python tools/mizumi_corpus.py --self-test
+      - name: measure_setup self-test
+        run: python tools/measure_setup.py --self-test
+      - name: verify_quotes self-test
+        run: python tools/verify_quotes.py --self-test
+      # both shapes of operator, end to end, with layer 2 deliberately absent
+      - name: a mixed history reads end to end
         run: |
-          python tools/nen_assets.py
-          python tools/nen_assets.py --lang ja
-          git diff --exit-code -- assets
-      - name: demo corpus runs end to end
-        run: python tools/water_divination.py measure --since 2026-01-01 --config examples/demo.json --out out
+          python tools/mizumi_corpus.py --history tests/fixtures/history_sample.jsonl --projects tests/fixtures/no-transcripts --tz-offset 0 --out out
+          python -c "import os,sys; missing=[f for f in ('out/corpus.jsonl','out/map.json','out/heavy.txt') if not os.path.isfile(f)]; print('outputs present:', not missing); sys.exit('missing: %s' % missing if missing else 0)"
+      - name: a quiet history reads end to end
+        run: |
+          python tools/mizumi_corpus.py --history tests/fixtures/history_thin.jsonl --projects tests/fixtures/no-transcripts --tz-offset 0 --out out
+          python -c "import os,sys; missing=[f for f in ('out/corpus.jsonl','out/map.json','out/heavy.txt') if not os.path.isfile(f)]; print('outputs present:', not missing); sys.exit('missing: %s' % missing if missing else 0)"
+      # The verifier has to pass a page whose quotes are real and fail one whose quotes are not.
+      # The negative runs through python rather than a shell `!` so it means the same thing under
+      # PowerShell as under bash.
+      - name: a page whose quotes are real passes
+        run: python tools/verify_quotes.py tests/fixtures/page_good.html --history tests/fixtures/history_sample.jsonl
+      - name: a page with an invented quote is rejected
+        run: |
+          python -c "import subprocess,sys; rc=subprocess.call([sys.executable,'tools/verify_quotes.py','tests/fixtures/page_bad.html','--history','tests/fixtures/history_sample.jsonl']); print('verify_quotes returncode', rc); sys.exit(0 if rc==1 else 1)"
+      # v1/v2 was a verdict engine; it is gone rather than dormant, and nothing that ships may still
+      # reach for it. The needles are written with a one-character bracket so that this file does
+      # not match its own search -- git grep reads them as the plain names.
+      - name: no v1 remnants in what ships
+        run: |
+          python -c "import subprocess,sys; pats=['nen_ach[i]eve','nen_sig[n]als','water_div[i]nation','stand[o]ut','patterns[/]']; args=['git','grep','-n']+[x for p in pats for x in ('-e',p)]+['--','tools','skill','README.md','README.ja.md','.github']; rc=subprocess.call(args); print('git grep returncode', rc, '(1 = nothing found, which is the pass)'); sys.exit(0 if rc==1 else 1)"

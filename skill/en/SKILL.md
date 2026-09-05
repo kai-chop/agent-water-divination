@@ -1,189 +1,150 @@
 ---
 name: water-divination
-description: Run a water divination on the person directing the AI — measure their own past messages in a date window, interview them about what the numbers cannot settle, and only then name which of six aptitudes their instructions actually show. Use when someone asks to be measured rather than the model ("read me", "what am I good at with AI", "water divination", "which type am I", "run my divination"), or when a periodic self-assessment is due. Not for evaluating a model's output quality.
+description: Read a person's own Claude Code history back to them and name which of the six 系統 (強化系・放出系・変化系・具現化系・操作系・特質系) from the article "AIに自分の水見式をさせてみた" their work actually shows. Scripts carry the text; a judge model reads it and writes the reading in ウイング's voice, with every quote machine-verified. Trigger on "water divination", "水見式", "read my history", "which type am I", "系統診断", "what's my main weapon".
 ---
 
-# water-divination — reading the operator, not the model
+# water-divination — v3 (the judge reads; the instruments only carry)
 
-Six aptitudes, after the Water Divination in *HUNTER × HUNTER*: you hold the glass, and which way
-the water changes tells you what you are. Here the glass is a month of your own messages.
+The deliverable is **a reading a person wants to re-read**: a self-portrait as someone who directs
+an AI, with depth, and the thrill of an actual 水見式. A metrology report is a failure even when
+every number in it is right.
 
-The tools count and ask. **You do the judging**, under the rules below.
+## Why v3 replaced the v1/v2 verdict engine
 
-## Sequence
+v1 and v2 were a scoring engine: pattern files, per-type signals, a computed 主武器. Across nine
+rounds in three days, eight of the nine changed the instrument rather than reading the person, and
+the named type swung five different ways — every swing caused by an edit to the engine, none by
+anything the person did. The last round of it read the history raw and counted `pip install x` as a
+founding utterance, `cd project` as 変化系, and its own build run as a top 放出系 instance. About
+4,500 lines of Python produced a reading five statistics sentences long. The article's own central
+finding — *the analysing AI's habits leak into the verdict* — had become the record.
 
-### 1. Measure
+So v3 keeps no verdict engine. The scripts only carry text; a judge model (a strong one) reads it
+and names the types; and because a judge can be fluent and wrong, every quotation on the page is
+machine-verified against the raw history before anyone sees it.
 
+## Inputs
+
+| What | Where |
+|---|---|
+| Layer 1: every prompt the operator sent | `~/.claude/history.jsonl` (display text, paste placeholders, project, session, ms timestamp) |
+| Layer 2: what happened afterwards, where a transcript survives | `~/.claude/projects/**/*.jsonl` (joined by session id + timestamp within 20 s) |
+| The six definitions (frozen, the article's wording) | `skill/nen-types.md` |
+| Coder instructions | `skill/en/coder-rubric.md` |
+| Previous rounds, if any | whatever ledger the operator keeps them in |
+
+## Procedure
+
+### 0. Connect
+If there is a record of a previous round, read its last entry. Note the previous 主武器 and any
+standing advice. Do not re-run an older version's scoring.
+
+### 1. Carry the text (scripts, mechanical)
 ```
-python tools/water_divination.py measure --since 2026-08-01 [--until 2026-08-31]
-python tools/water_divination.py measure --last 30d
-python tools/water_divination.py measure --on 2026-08-15
+python tools/mizumi_corpus.py --out out
+python tools/measure_setup.py --corpus out/corpus.jsonl
 ```
+Outputs into `out/`: `corpus.jsonl` (every prompt classified command / short / substantive /
+non_self, tiers founding / return / opening / sustained, transcript-derived `after`), `map.json`
+(projects × months × chars), `chunk_A..C.txt` (chronological thirds of the substantive prompts, in
+coder format), `heavy.txt` (substantive prompts ≥ 120 chars). `measure_setup.py` prints setup depth
+against the public adoption table, plus tempo, uninterrupted autonomy runs, hour-of-day, and
+correction / question / rule / image / metaphor proxies. On Windows run `py -3 file`, never a
+multi-line `-c`.
 
-Writes `out/divination.json`, a provisional `out/water-divination.html`, and `out/answers.json`
-with one empty slot per open question.
+### 2. The judge reads (not delegated)
+Read **all of `out/heavy.txt`** yourself, in order. This is the part no summary can stand in for.
+Everything the reading claims must trace back to a line you read, or to a coder line you then
+verified.
 
-Read the scan report before anything else. `read N, kept M` per source is how you tell a store
-that was empty from a store that was never there. Fewer than ~50 of the operator's own messages
-is too thin to judge — say so and widen the window rather than producing a confident reading of
-almost nothing.
+### 3. Coders carry candidates (delegated, 3–4 in parallel)
+One agent per chronological chunk (split the transcript-rich tail in two). Each reads
+`skill/en/coder-rubric.md`, then its chunk **to the last line**, then writes `findings_X.json`: per
+type ≤ 12 candidates ranked by strength with a verbatim quote, why, and what followed; 特質系
+candidates; costs; voice; notes. Coders extract; they never name a type. Their quotes are verbatim
+by contract and are re-verified in step 6.
 
-### 2. Interview — after the reading, and kept short
+### 4. Name the types (judge)
+- Name from **what happened**, not from vocabulary: the signature of each type is an event (a rule
+  became machinery; a metaphor became a file; a constraint survived weeks; an image was delivered
+  and built without a question; a vague wish became a completion condition).
+- **One strong, verified instance outranks ten weak ones.** Counts are context, never the ground.
+- Three states, never merged: 立った (named, with quotes) / 沈黙 (looked for, did not occur) /
+  測れなかった (no transcript — not zero).
+- 特質系 is **additive**: name the five first, then ask what the five do not explain. Naming it
+  requires the negative argument, one line per excluded type. Not finding it is the ordinary result.
+- Costs get the same rigour as strengths; each strength's cost is its own reverse side.
+- Exclude from evidence: shell and slash commands, URL-only lines, pasted replies from other AIs,
+  UI strings, and anything containing a secret, a money figure, a third party's name, or family
+  matters.
 
-**The reading comes first.** `measure` names what it looks like, then lists what would settle it.
-Piling questions in front of an answer turns a divination into paperwork, and nobody comes back
-to paperwork. Questions of the same shape are already folded into one by the tool, with the cases
-listed under `items` — **do not unfold them**, and leave the optional ones alone unless the
-operator asks.
+### 5. 偏差値 (encouragement, with the method shown)
+One axis is computable: **setup depth** against the public adoption table below,
+偏差値 = 50 + 10·Φ⁻¹(1 − p), where p is the share of the reference population at or above the
+operator's level. Every other axis is the judge's estimate and is **labelled as one** on the page
+(a hatched bar), with its basis in one line. Never present an estimate as a measurement.
 
-The tool lists what a regex could not settle. Ask them **in conversation, one at a time**, in the
-operator's own language. Three kinds:
+Reference table (refresh when newer public data exists; cite source + date on the page).
+Source: Build This Now, 2,500 public Claude Code repositories, 2026-06.
 
-- **authorship** — a quote long enough to have been pasted. Show it and ask if they wrote it.
-  Answering "no" *revokes* that quote; the tool enforces it.
-- **probe** — the corpus produced fewer than two quotes for a type, so ask its probe question and
-  watch **the shape of the answer**, not whether it is correct. Each probe ships with what to
-  watch for.
-- **occasion** — a signal or an axis sits at zero, or has too few observations to rate. Zero means
-  no ability or no opportunity, and only they know which. This decides whether it is a weakness.
-- **attribution** — an axis produced a rate. Ask whether the cases it counted were the same kind
-  of work as the rest. A number that only holds on easy work is not an aptitude.
-- **rare** — a rare event fired. Show them the moment and ask whether it was deliberate.
-
-Record each answer in `out/answers.json` as `{"answer": "...", "note": "what you observed"}`.
-For a probe, `answer` is `pass` or `fail` and the note says what you saw in their reply.
-
-Before quoting anything in the final reading, pull it back with its context:
-
-```
-python tools/nen_context.py "a distinctive fragment"
-```
-
-Exit 1 means the quote is not in the corpus — then it cannot be used, no matter how good it sounds.
-
-#### The route, and the questions you should expect
-
-Whoever is holding the glass, the shape is the same. Two questions usually stand between a
-reading and a name, and both are folded — ask each once, with the cases listed.
-
-```
-measure ──► a name ──► two questions ──► verdict ──► the ledger row
-            (widest      attribution      refuses      the only thing that
-             separation)  authorship      until both   survives the corpus
-                                          are answered
-```
-
-| Question | What it settles | What a "no" does |
+| Feature | Share of the sample | 偏差値 if this is all you have |
 |---|---|---|
-| `attribution` | Whether the cases an axis counted were the same kind of work as the rest | "the easier ones" — say so in the reading; the axis stops being an aptitude claim |
-| `authorship` | Whether the quotes behind the reading are the operator's own words | naming one drops exactly that quote, and a type can lose its verdict with it |
-| `probe` *(optional)* | A type the corpus could not show — ask its probe and watch the shape of the reply | fail: the type is not named this time |
-| `occasion` *(optional)* | Whether a zero means no ability or no opportunity | "no occasion" — it is not a weakness |
-| `residual` *(optional)* | Whether the leftover holds something the five do not describe | "nothing here" is the ordinary answer |
+| CLAUDE.md | 84.9 % | 40 |
+| settings.json | 41.0 % | 52 |
+| skills | 28.1 % | 56 |
+| custom commands | 25.6 % | 57 |
+| custom subagents | 24.6 % | 57 |
+| MCP | 17.0 % | 60 |
+| hooks | 13.3 % | 61 |
 
-Do not invent questions beyond these, and do not unfold the folded ones. If the operator answers
-"same kind" and "all mine", you are one command from a name — go there rather than asking more.
+**No public per-user distribution exists for the five types themselves.** Say so on the page.
 
-#### The portrait — the two or three sentences they keep
+### 6. Write the reading — the voice is ウイング
+Order of the page; each section is load-bearing, not decoration:
+1. **前口上** — the judge's own habits, declared; what earlier rounds got wrong, in one paragraph.
+2. **地図** — window, prompts, sessions, active days, hour band, months × projects, when the centre
+   moved. The half the person can check against their own memory; naming comes after it.
+3. **六つのコップ** — per type: 反応 (立った / 沈黙 / 測れなかった), signature, 2–4 verbatim quotes
+   with date and (when known) what was written afterwards, what the move makes possible, what it
+   costs. 主武器 first, 特質系 last with the negative argument.
+4. **偏差値** — the computed axis with its table, the estimated axes hatched, basis lines.
+5. **代償** — three at most, each the reverse side of a named strength, with the measured proxies.
+6. **言葉の癖** — the voice items; readers remember these.
+7. **明日から** — at most three 修行, concrete and small. Propose; never edit the person's config.
+8. **奥付** — judge, window, corpus counts, coder count, sources, the judge's own habits, what was
+   left out, and the quote-verification line.
 
-Write it into `verdict.portrait`. **In the operator's own language**: if the corpus is Japanese the
-portrait is Japanese, and the tool's own wording follows the first pattern file listed.
+Voice rules (ウイング of *HUNTER × HUNTER*), kept in the original Japanese because they are the
+instruction: 丁寧語で順を追う（「いいですか」「よく聞いてください」）; 誇張しない; 分からないことは
+分からないと言う; 代償を褒め言葉より先に置く; 相手を子ども扱いしない; 禁止＝占い師めいた断定・
+能力バトル的な誇張・「あなたは特別です」型のお世辞. Definitions are never pasted as a verdict;
+quotes are never smoothed. Write in the speaker's language.
 
-How to build it (**never paste the type's definition**):
-1. one sentence naming the move that two or three of their verified quotes have in common
-2. one sentence on what that move buys them
-3. one sentence on what it costs them — **leave this out and it becomes flattery**
-
-**The voice is a choice.** The one this repo was built around is the teacher who administers the
-test in the original: polite, step by step, no exaggeration, says plainly when something is not
-known, and names the cost before the benefit. Whatever voice you pick, two things are out: the
-fortune-teller's certainty, and "you are special".
-
-### 3. Verdict
-
-Fill the `verdict` block in the answers file (`main`, `roles`, `reads`, `summary`), then:
-
+### 7. Verify before anyone sees it
 ```
-python tools/water_divination.py verdict --result out/divination.json --answers out/answers.json
+python tools/verify_quotes.py page.html
 ```
+Every `<blockquote><p>…</p>` must be a verbatim substring of a history.jsonl line; the script prints
+`scanned=N matched=M` and exits 1 on any miss **and on zero quotes**. Put that line in the 奥付.
 
-It refuses (exit 3) while a blocking question is unanswered, when no type is named, or when the
-named type has lost its evidence to revocation without a probe replacing it. A refusal is the
-tool working. Answer what it names and run it again.
-
-## Rules for the judging
-
-0a. **Always name a type.** A glass that shows nothing is a broken divination. Rigour lives in the
-   confidence and in the stated basis, never in whether an answer exists: from an axis when one
-   separated, otherwise from the largest spoke of the profile, with `basis` printed beside it.
-   The tool's `reading` gives you this; overriding it requires saying why. **Write
-   `verdict.portrait`** — one or two sentences describing the person in their own terms, built
-   from their quotes rather than pasted from the definition. That line is what they take away.
-0b. **The radar is a profile, not a scoreboard.** It is the share of messages carrying a type's
-   marks, not evidence anything worked. Never call a low spoke a weakness — say they did not
-   reach for it this period. A type with broad vocabulary reads high; `--audit-patterns` measures
-   how broad.
-0c. **A divination names what showed. It does not enumerate what could not be measured.** The
-   glass gives one reaction. An axis that did not show is **not a weakness and not homework** —
-   it is simply not part of this reading. Its numbers stay in the result JSON and the ledger; the
-   verdict and the interview leave it alone. Writing "cannot be compared" over and over produces
-   a measurement report, not a reading. The tools take the same shape: only axes that reacted are
-   drawn into a type's card, and the rest are summarised in one line. **A separation the other way
-   is different** — name it as having gone the other way, never folded in with the strengths.
-1. **Two verified quotes, or no naming.** A type is named only with (a) a signal count you can
-   state and (b) two quotes read in their original context. One without the other is `undetermined`,
-   never a weak yes.
-2. **Where a type has an axis, the axis outranks the vocabulary.** Counting the words tells you the
-   aptitude was exercised; the axis is the only thing that says it worked. A type with a strong
-   signal and a weak axis is a habit, not an aptitude — say exactly that. A type whose axis had too
-   few observations falls back to the vocabulary, and the reading says which one it rested on.
-3. **Specialist has a precondition, and it is machine-checked.** A leftover only means something
-   when the five explain **more than half** of your substantive messages. Below that floor most of
-   the leftover is what the detectors missed rather than what they cannot describe, so the tool
-   returns `usable: false` and it may not be used to recognise the type. Read it as material if
-   you like; do not build a verdict on it.
-   **Specialist is you reading the residual, and saying why.** All the tool does is isolate the
-   messages none of the five explain that the agent nonetheless acted on. It claims nothing about
-   them — the order is "wording unusual for your own corpus", which is a reading order, not a
-   score. Your job is to read that residual and state, with reasons, one of:
-   - **there is a Specialist element** — what it is, and one line on why each of the other five
-     does not already describe it
-   - **there is not** — and what the residual turned out to be instead
-
-   Show the operator the quotes and confirm them. **"There is not" is the ordinary outcome**, not
-   a gap. Never argue Specialist from a count: the moment you decide what to count, it stops being
-   a residual and becomes another pattern.
-3. **Never fold ambiguity into a weakness.** When evidence points both ways, give both readings and
-   say which way it leans. Rewriting a neutral or forced move as a flaw to look rigorous makes the
-   reading worthless, and it is the most common way this goes wrong.
-4. **Main type = the most verified evidence, not the highest percentage.** A big number on a loose
-   pattern is not an aptitude.
-5. **Zero is a finding with a cause, never an absence.** Report it as "no occasion" or "no attempt"
-   based on their answer, or as "the vocabulary may have missed it" — and widening a pattern until
-   it matches quotes you already chose is fitting the instrument to the answer. Don't.
-6. **Do not raise the bar between readings.** A type falls only when the numbers fell or a real
-   defect appeared in behaviour — not because this round's reader is stricter.
-7. **Declare your own bias, in one line, about this reading.** Whoever chose the patterns decided
-   what counts as evidence; if you have just read this person's rules and style guide, you will tend
-   to find the things those documents talk about. Say where that could have landed in *this*
-   verdict, concretely. When the main type changes, when a type is recognised for the first time, or
-   when you built or edited the instrument in the same session, get a second opinion from a model
-   that has not seen this conversation.
+### 8. Publish and record
+- Publish the page privately first. Read it yourself before sharing it: it contains the person's
+  own words.
+- Append **one row** to whatever ledger the operator keeps: window, corpus counts, per-type verdict
+  with the anchor quotes' ids, 偏差値 with basis, coder set, the judge's own habits, what was
+  excluded. Never edit past rows.
 
 ## Hard gates
 
-- Never name a type on regex counts alone.
-- Never quote a line that `nen_context.py` cannot find.
-- Never issue a verdict past a refusal by editing the answers to satisfy the gate — answer the
-  question that was asked.
-- Keep the six definitions in `patterns/*.json` frozen. Reword them and no past reading can be
-  compared with a future one; if one truly must change, add a version and say so in the reading.
-- Anything you publish from a reading contains the operator's private words. Ask before it leaves
-  the machine, and never include credentials, client names, or third parties' words.
-
-## Repeat readings
-
-Keep the numbers somewhere durable. Transcripts get rotated and deleted — the corpus a reading was
-made from is often gone by the next one, and then the recorded numbers are the only surviving
-record. State plainly when two readings cover different windows, different instrument versions, or
-different corpora; they are not comparable just because they used the same six names.
+- **No metrology report.** A page whose spine is denominators and confidence intervals is a failed
+  reading regardless of correctness.
+- **No name without a verbatim, machine-verified quote.** `verify_quotes.py` must pass.
+- Commands, pastes, other AIs' text, secrets, money, third parties, family: never evidence, never
+  on the page.
+- 偏差値 estimates are labelled as estimates; only the setup axis is called computed.
+- 特質系 is additive; naming it requires the negative argument; absence is normal.
+- The judge writes the reading. Coders extract only.
+- The judge declares their own habits in the 奥付, and where those could have leaned on the reading.
+- Past ledger rows are immutable.
+- **Do not resurrect a verdict engine.** If a count is wanted, add a proxy to `measure_setup.py`
+  and show it as a proxy.
